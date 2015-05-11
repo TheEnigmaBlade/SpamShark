@@ -144,6 +144,15 @@ def submit_text_post(r, subreddit, title, body):
 def send_modmail(r, subreddit, title, body):
 	r.send_message("/r/"+subreddit, title, body)
 
+def send_pm(r, user, title, body, from_sr=None):
+	r.send_message(user, title, body, from_sr=from_sr)
+
+def reply_to(thing, body):
+	if isinstance(thing, praw.objects.Inboxable):
+		thing.reply(body)
+	elif isinstance(thing, praw.objects.Submission):
+		thing.add_comment(body)
+
 # Utilities
 
 redditReductionPattern = re.compile("https?://(?:.+\.)?(?:reddit\.com(?:(/r/\w+/comments/\w+/?)(?:(?:\w+/?)(.*))?|(?:(/(?:u|user|m|message|r/\w+)/.+)))|(redd.it/\w+))")

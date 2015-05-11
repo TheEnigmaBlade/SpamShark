@@ -60,7 +60,7 @@ def build_remote_config():
 		return lists
 		
 	except (yaml.YAMLError, KeyError) as e:
-		print("Failed to parse config: {}".format(e))
+		print("Error: failed to parse config, {}".format(e))
 		return None
 
 def get_filters():
@@ -68,15 +68,22 @@ def get_filters():
 	import importlib
 	
 	filters = []
-	for file in glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)) + "/filters") + "/*.py"):
+	files = glob.glob("filters/*.py")
+	for file in files:
 		name = os.path.splitext(os.path.basename(file))[0]
+		print(name)
 		module = importlib.import_module("filters." + name)
+		print(module)
 		for member in dir(module):
-			if member.startswith("__") or member == "Filter":
+			if member.startswith("__") \
+					or member == "Filter" \
+					or member == "LinkFilter" \
+					or member == "PostFilter" \
+					or member == "CommentFilter":
 				continue
 			
 			member_inst = getattr(module, member)
-			if issubclass(member_inst, Filter):
+			if isinstance(member_inst, Filter.__class__):
 				filters.append(member_inst)
 	
 	return filters
@@ -131,13 +138,17 @@ comment_filters = []
 def init_filters():
 	# Load filters if not already loaded
 	if len(all_filters) == 0:
+		print("Initializing filters")
 		new_filters = get_filters()
+		from pprint import pprint
+		pprint(new_filters)
 		
-		for nf in new_filters:
-			if nf.filter_id is None:
+		for filter_class in new_filters:
+			if filter_class.filter_id is None:
 				print("Filter {} must specify a filter_id".format(nf.__module__+"."+nf.__name__))
 				continue
 			
+			nf = filter_class()
 			if nf.filter_id in config.enabled_filters:
 				all_filters.append(nf)
 				if issubclass(nf, LinkFilter):
@@ -147,13 +158,15 @@ def init_filters():
 				if issubclass(nf, CommentFilter):
 					comment_filters.append(nf)
 	
-	print("All filters: {}".format(all_filters))
-	print("Link filters: {}".format(link_filters))
-	print("Post filters: {}".format(post_filters))
-	print("Comment filters: {}".format(comment_filters))
+		print("  All filters: {}".format(all_filters))
+		print("  Link filters: {}".format(link_filters))
+		print("  Post filters: {}".format(post_filters))
+		print("  Comment filters: {}".format(comment_filters))
 	
 	# Initialize filters with wiki config
 	configs = build_remote_config()
+	print("Configs: ", end="")
+	print(configs)
 	for f in all_filters:
 		# TODO: filter configs by filter ID
 		f.init_filter(configs)
@@ -167,7 +180,7 @@ def process_post(post):
 		if results and results[0]:
 			if results[1]:
 				post.remove()
-			_send_messages(results[3], post=post)
+			_send_messages(results[3], post)
 			return True
 	
 	# Link check
@@ -188,7 +201,7 @@ def process_post(post):
 			if results[0] <= FilterResult.REMOVE:
 				post.remove()
 			if results[0] <= FilterResult.MESSAGE:
-				_send_messages(results[1], post=post)
+				_send_messages(results[1], post)
 			if results[0] <= FilterResult.LOG:
 				_log_result(results[1])
 			return True
@@ -202,7 +215,7 @@ def process_comment(comment):
 		if results and results[0]:
 			if results[1]:
 				comment.remove()
-			_send_messages(results[1], comment=comment)
+			_send_messages(results[1], comment)
 			return True
 	
 	# Link check
@@ -219,7 +232,7 @@ def process_comment(comment):
 			if results[0] <= FilterResult.REMOVE:
 				comment.remove()
 			if results[0] <= FilterResult.MESSAGE:
-				_send_messages(results[1], comment=comment)
+				_send_messages(results[1], comment)
 			if results[0] <= FilterResult.LOG:
 				_log_result(results[1])
 			return True
@@ -234,16 +247,26 @@ def process_link(link, thing):
 			return results
 	return False
 
-#TODO: figure out a way to do this without separate post/comment args
-def _send_messages(messages, post=None, comment=None):
+def _send_messages(messages, thing=None):
+	#TODO: post/comment info replacement
+	
 	if "modmail" in messages:
-		title = "[SpamShark] "+messages["log"][0]
-		body = messages["log"][1]
+		title = "[SpamShark] "+messages["modmail"][0]
+		body = messages["modmail"][1]
 		reddit_util.send_modmail(r, config.subreddit, title, body)
-	if "reply" in messages:
-		pass
-	if "pm" in messages:
-		pass
+	if not thing is None:
+		if "reply" in messages:
+			#TODO: test this
+			body = messages["reply"]
+			reddit_util.reply_to(thing, body)
+		if "pm" in messages:
+			#TODO: test this
+			author = thing.author.name
+			title = messages["pm"][0]
+			body = messages["pm"][1]
+			# TODO: see if current subreddit can be pulled from post/comment
+			#from_sr = thing.subreddit if len(messages["pm"]) > 2 and messages["pm"][2] else None
+			reddit_util.send_pm(r, author, title, body)
 
 def _log_result(messages):
 	if "log" in messages:
@@ -277,7 +300,8 @@ def process_loop():
 				print("New message: {}".format(message))
 				message.mark_as_read()
 				
-				if message.subject.lower() == config.subreddit and message.body == "update" and (len(config.config_whitelist) == 0 or message.author.name.lower() in config.config_whitelist):
+				if message.subject.lower() == config.subreddit and message.body == "update" \
+						and (len(config.config_whitelist) == 0 or message.author.name.lower() in config.config_whitelist):
 					update = True
 			#print("done!")
 			
@@ -289,6 +313,9 @@ def process_loop():
 			
 			# Do some moderation!
 			subreddit = r.get_subreddit(config.subreddit)
+			
+			for f in all_filters:
+				f.update()
 			
 			#print("Processing new posts...", end=" ")
 			new_posts = reddit_util.get_all_new(subreddit)
