@@ -119,6 +119,15 @@ def get_all_comments(subreddit):
 	_last_comment_time = comments[0].created_utc
 	return comments
 
+def get_wiki_page(subreddit, page):
+	# Workaround because the current version of PRAW can't access restricted wiki pages through oauth
+	r2 = init_reddit_session_old()
+	if r2 is None:
+		return None
+	result = r2.get_wiki_page(subreddit, page)
+	destroy_reddit_session(r2)
+	return result
+
 # Thing doing
 
 def comment_on(comment_text, post=None, comment=None, distinguish=False):

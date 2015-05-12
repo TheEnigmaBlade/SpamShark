@@ -24,16 +24,8 @@ def build_local_config():
 		raise ValueError("All authentication parameters must be specified")
 	config.username = config.username.lower()
 
-def get_remote_config():
-	r2 = reddit_util.init_reddit_session_old()
-	if r2 is None:
-		return None
-	result = r2.get_wiki_page(config.config_subreddit, config.config_page)
-	reddit_util.destroy_reddit_session(r2)
-	return result
-
 def build_remote_config():
-	wiki_config = get_remote_config()
+	wiki_config = reddit_util.get_wiki_page(config.config_subreddit, config.config_page)
 	if not wiki_config:
 		print("Error: wiki page doesn't exist")
 		return None
@@ -41,23 +33,19 @@ def build_remote_config():
 	try:
 		parsed = yaml.safe_load_all(wiki_config.content_md)
 		
-		# TODO: make dynamic
-		lists = {"youtube-channel": {"ban": [], "watch": []}}
-		for group in parsed:
-			category = group["filter"].lower()
-			action = group["action"].lower()
-			ids = group["ids"]
+		config_groups = {}
+		for i, group in enumerate(parsed):
+			if not "filter" in group:
+				print("Warning: config {} not associated with filter".format(i+1))
+				continue
+			filter_id = group["filter"]
+			del group["filter"]
 			
-			if category != "youtube-channel":
-				print("Site \"{}\" not supported".format(category))
-				return None
-			if action != "ban" and action != "watch":
-				print("Type \"{}\" not supported".format(action))
-				return None
-			
-			lists[category][action].extend(ids)
+			if not filter_id in config_groups:
+				config_groups[filter_id] = []
+			config_groups[filter_id].append(group)
 		
-		return lists
+		return config_groups
 		
 	except (yaml.YAMLError, KeyError) as e:
 		print("Error: failed to parse config, {}".format(e))
@@ -165,11 +153,15 @@ def init_filters():
 	
 	# Initialize filters with wiki config
 	configs = build_remote_config()
-	print("Configs: ", end="")
-	print(configs)
 	for f in all_filters:
-		# TODO: filter configs by filter ID
-		f.init_filter(configs)
+		print("Configuring filter: {}".format(f.filter_id))
+		f_configs = configs[f.filter_id] if f.filter_id in configs else []
+		try:
+			error = f.init_filter(f_configs)
+		except Exception as e:
+			error = e
+		if error:
+			print("  Error: configuration failed, {}".format(error))
 
 # Processing
 

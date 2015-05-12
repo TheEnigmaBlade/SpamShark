@@ -95,7 +95,7 @@ def _youtube_request(request_url):
 	url = request_url+"&key="+config.youtube_api_key
 	
 	print("Requesting YT URL: {}".format(url))
-	_yt_last_time = _requst_wait(_yt_last_time, 0.1)
+	_yt_last_time = _requst_wait(_yt_last_time, 0)
 	response = requests.get(url, headers=_yt_headers)
 	print("  Status: {}".format(response.status_code))
 	
@@ -114,6 +114,6 @@ from time import time, sleep
 
 def _requst_wait(last_time, delay):
 	time_since = time() - last_time
-	if time_since < delay:
+	if 0 < time_since < delay:
 		sleep(delay - time_since)
 	return time()
