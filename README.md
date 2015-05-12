@@ -25,6 +25,10 @@ class TemplateFilter(Filter, LinkFilter):
         # Do filter initialization here
         # A list of parsed YAML rules are passed in through 'configs'
     
+    def update(self):
+      # OPTIONAL
+      # Do stuff each iteration before posts and comments are processed
+    
     def process_link(self, link, thing):
         # Process a link within a thing (post or comment)
         # Returns a filter result and map of message actions
