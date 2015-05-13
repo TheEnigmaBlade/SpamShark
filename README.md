@@ -11,6 +11,12 @@ Modularized reddit moderation bot with a focus on spam prevention.
 
 ## Getting started
 
+#### Default filters
+
+* YouTube channel bans: `youtube-channel`
+
+## Creating filters
+
 To create a new filter, create or edit a python file in the `filters` directory. Create a class extending `spam_shark.Filter` and one or more filter types.
 
 #### Filter template
