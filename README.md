@@ -14,6 +14,7 @@ Modularized reddit moderation bot with a focus on spam prevention.
 #### Default filters
 
 * YouTube channel bans: `youtube-channel`
+* YouTube vote manipulation monitor: `youtube-votemanip`
 
 ## Creating filters
 
@@ -60,10 +61,28 @@ Defined in enum `spam_shark.FilterResult`
 * `MESSAGE`: Performs message actions and logs the action
 
   Requires one or more of the following defined in message actions:
-  * ```"modmail": (log_title, log_body)```
+  * ```"modmail": (modmail_title, modmail_body)```
   * ```"reply": reply_body```
   * ```"pm": (pm_title, pm_body)```
 
 * `LOG`: Logs the action
 
   Requires ```"log": (log_title, log_body)``` defined in message actions
+
+All message texts (title and body) are auto-formatted with basic post information using Python format syntax. The available values are:
+
+* `author`
+* `permalink`
+
+#### Filter configuration
+
+Filters can be configured through a subreddit wiki page (defaults to `/wiki/spamshark`) using YAML syntax. Exact format of a configuration section depends on the filter, but every section **must specify a filter ID** to which the config applies.
+
+Example using the template above:
+
+```yaml
+# Template configuration
+---
+    filter: "filter-template"
+    # ...
+```
