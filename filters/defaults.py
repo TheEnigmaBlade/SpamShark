@@ -1,6 +1,7 @@
 from spam_shark import Filter, FilterResult, LinkFilter, PostFilter
-import reddit_util, media_util
+import media_util
 from cache.cache import TimedObjCache
+import config
 
 class YouTubeChannelFilter(Filter, LinkFilter):
 	filter_id = "youtube-channel"
@@ -74,18 +75,35 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 		to_check = self.post_cache._prune()
 		
 		for url, post in to_check:
-			#TODO: check uploader comments
+			# Video description
 			desc = media_util.get_youtube_video_description(url)
-			if "reddit.com" in desc or "redd.it" in desc:
-				title = "Possible YouTube vote solicitation"
-				body = "Check the video description to see if they're asking for upvotes.\n\n" \
-					   "* Video: {video_url}\n" \
-					   "* User: {author}\n" \
-					   "* Permalink: {permalink}\n" \
-					   		.format(video_url=url)
-				return FilterResult.MESSAGE, {"modmail": (title, body)}, post
+			if self._wow_such_vote_solicitation(desc):
+				return self._get_response(url, post)
+			
+			# Video comments
+			# Might be better to only check uploader comments
+			comments = media_util.get_youtube_comments(url)
+			for comment in comments:
+				if self._wow_such_vote_solicitation(comment):
+					return self._get_response(url, post)
+		
+		return False
 	
 	def process_post(self, post):
 		if not post.is_self and media_util.is_youtube_video(post.url):
 			self.post_cache.store(post.url, post)
 		return False
+	
+	@staticmethod
+	def _wow_such_vote_solicitation(text):
+		return "reddit.com/r/"+config.subreddit in text or "redd.it" in text
+	
+	@staticmethod
+	def _get_response(video_url, post):
+		title = "Possible YouTube vote solicitation"
+		body = "Check the video description to see if they're asking for upvotes.\n\n" \
+			   "* Video: {video_url}\n" \
+			   "* User: {author}\n" \
+			   "* Permalink: {permalink}\n" \
+			   		.format(video_url=video_url)
+		return FilterResult.MESSAGE, {"modmail": (title, body)}, post

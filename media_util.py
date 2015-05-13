@@ -7,6 +7,7 @@ import config
 _yt_sigs = ["youtube.com", "youtu.be"]
 _yt_headers = {"User-Agent": config.useragent}
 _yt_video_url = "https://www.googleapis.com/youtube/v3/videos?part={type}&id={id}"
+_yt_comments_url = "https://www.googleapis.com/youtube/v3/commentThreads?part={type}&textFormat=plainText&videoId={id}"
 _yt_last_time = 0
 _yt_cache = TimedObjCache(expiration=1800)	# 30 min
 
@@ -49,9 +50,7 @@ def get_youtube_channel(url):
 def _get_channel_from_video(video_id):
 	url = _yt_video_url.format(type="snippet", id=video_id)
 	response = _youtube_request(url)
-	if response is None:
-		return None
-	if len(response["items"]) == 0:
+	if response is None or len(response["items"]) == 0:
 		return None
 	
 	video_info = response["items"][0]
@@ -86,7 +85,7 @@ def get_youtube_video_description(url):
 	if not video_id is None:
 		url = _yt_video_url.format(type="snippet", id=video_id)
 		response = _youtube_request(url)
-		if response is None:
+		if response is None or len(response["items"]) == 0:
 			return None
 		
 		video_info = response["items"][0]
@@ -96,8 +95,25 @@ def get_youtube_video_description(url):
 	
 	return None
 
-def get_youtube_uploader_comments(url):
-	pass
+def get_youtube_comments(url):
+	video_id = get_youtube_video_id(url)
+	if not video_id is None:
+		url = _yt_comments_url.format(type="snippet", id=video_id)
+		response = _youtube_request(url)
+		if response is None or len(response["items"]) == 0:
+			return None
+		
+		comment_threads = response["items"]
+		whargarbl = []
+		for comment_thread in comment_threads:
+			comment = comment_thread["snippet"]["topLevelComment"]["snippet"]
+			text = comment["textDisplay"]
+			if text.endswith("\ufeff"):
+				text = text[:-1]
+			whargarbl.append(text)
+		return whargarbl
+		
+	return None
 
 def _youtube_request(request_url):
 	global _yt_last_time
