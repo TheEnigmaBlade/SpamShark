@@ -45,13 +45,16 @@ class TimedObjCache(Cache):
 		self.expiration = expiration
 	
 	def _prune(self):
+		old = []
 		for key in self._data.keys():
 			data, added = self._data[key]
 			time_since = time() - added
 			if time_since >= self.expiration:
+				old.append((key, self._data[key]))
 				del self._data[key]
 			else:
 				break
+		return old
 	
 	def get(self, key):
 		self._prune()

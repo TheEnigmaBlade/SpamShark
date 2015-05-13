@@ -2,11 +2,11 @@
 from abc import ABCMeta, abstractmethod
 from enum import IntEnum, unique
 from requests import HTTPError
-import sys, yaml, re, traceback
+import sys, yaml, re, traceback, inspect
 from threading import Thread, Event
 from praw.errors import ModeratorRequired, ModeratorOrScopeRequired
 
-import config, reddit_util, media_util
+import config, reddit_util
 from cache.cache import load_cached_storage
 
 # Globals
@@ -59,9 +59,7 @@ def get_filters():
 	files = glob.glob("filters/*.py")
 	for file in files:
 		name = os.path.splitext(os.path.basename(file))[0]
-		print(name)
 		module = importlib.import_module("filters." + name)
-		print(module)
 		for member in dir(module):
 			if member.startswith("__") \
 					or member == "Filter" \
@@ -70,9 +68,15 @@ def get_filters():
 					or member == "CommentFilter":
 				continue
 			
-			member_inst = getattr(module, member)
-			if isinstance(member_inst, Filter.__class__):
-				filters.append(member_inst)
+			member_class = getattr(module, member)
+			if inspect.isclass(member_class):
+				try:
+					# Nasty workaround since a Filter imported into another module is different from the one used here
+					if fake_isinstance(member_class, Filter):
+						filters.append(member_class)
+				except TypeError:
+					# Not-so-neat way of avoiding uninitializable types with no built-in type checks, like enum
+					pass
 	
 	return filters
 
@@ -124,55 +128,58 @@ post_filters = []
 comment_filters = []
 
 def init_filters():
+	print("Loading filters...", end=" ")
+	
 	# Load filters if not already loaded
 	if len(all_filters) == 0:
-		print("Initializing filters")
 		new_filters = get_filters()
-		from pprint import pprint
-		pprint(new_filters)
+		print("using {} filters...".format(len(new_filters)), end=" ")
 		
-		for filter_class in new_filters:
-			if filter_class.filter_id is None:
-				print("Filter {} must specify a filter_id".format(nf.__module__+"."+nf.__name__))
+		for nf_class in new_filters:
+			if nf_class.filter_id is None:
+				print("\n  Error: Filter {} must specify a filter_id\n".format(nf_class.__module__+"."+nf_class.__name__))
 				continue
 			
-			nf = filter_class()
-			if nf.filter_id in config.enabled_filters:
+			if nf_class.filter_id in config.enabled_filters:
+				nf = nf_class()
 				all_filters.append(nf)
-				if issubclass(nf, LinkFilter):
+				if fake_isinstance(nf_class, LinkFilter):
 					link_filters.append(nf)
-				if issubclass(nf, PostFilter):
+				if fake_isinstance(nf_class, PostFilter):
 					post_filters.append(nf)
-				if issubclass(nf, CommentFilter):
+				if fake_isinstance(nf_class, CommentFilter):
 					comment_filters.append(nf)
 	
-		print("  All filters: {}".format(all_filters))
-		print("  Link filters: {}".format(link_filters))
-		print("  Post filters: {}".format(post_filters))
-		print("  Comment filters: {}".format(comment_filters))
-	
 	# Initialize filters with wiki config
+	print("configuring filters...", end=" ")
 	configs = build_remote_config()
 	for f in all_filters:
-		print("Configuring filter: {}".format(f.filter_id))
+		print("\nConfiguring {}".format(f.filter_id))
+		print("--------------------")
 		f_configs = configs[f.filter_id] if f.filter_id in configs else []
 		try:
 			error = f.init_filter(f_configs)
+			if error:
+				print("\n  Error: Filter configuration failed for {} ({})\n".format(f.filter_id, error))
 		except Exception as e:
-			error = e
-		if error:
-			print("  Error: configuration failed, {}".format(error))
+			ex_type, ex, tb = sys.exc_info()
+			print("Error: Filter configuration unexpectedly failed for {} ({})".format(f.filter_id, e))
+			traceback.print_tb(tb)
+			del tb
+		
+		print("--------------------")
+	
+	print("done!")
 
 # Processing
 
 def process_post(post):
+	
+	
 	# Check post filters first
 	for f in post_filters:
 		results = f.process_post(post)
-		if results and results[0]:
-			if results[1]:
-				post.remove()
-			_send_messages(results[3], post)
+		if process_filter_results(results, post):
 			return True
 	
 	# Link check
@@ -189,13 +196,7 @@ def process_post(post):
 	# Process links
 	for link in links:
 		results = process_link(link, post)
-		if results and results[0]:
-			if results[0] <= FilterResult.REMOVE:
-				post.remove()
-			if results[0] <= FilterResult.MESSAGE:
-				_send_messages(results[1], post)
-			if results[0] <= FilterResult.LOG:
-				_log_result(results[1])
+		if process_filter_results(results, post):
 			return True
 	
 	return False
@@ -204,10 +205,7 @@ def process_comment(comment):
 	# Check comment filters
 	for f in comment_filters:
 		results = f.process_comment(comment)
-		if results and results[0]:
-			if results[1]:
-				comment.remove()
-			_send_messages(results[1], comment)
+		if process_filter_results(results, comment):
 			return True
 	
 	# Link check
@@ -220,13 +218,7 @@ def process_comment(comment):
 	# Process links
 	for link in links:
 		results = process_link(link, comment)
-		if results and results[0]:
-			if results[0] <= FilterResult.REMOVE:
-				comment.remove()
-			if results[0] <= FilterResult.MESSAGE:
-				_send_messages(results[1], comment)
-			if results[0] <= FilterResult.LOG:
-				_log_result(results[1])
+		if process_filter_results(results, comment):
 			return True
 	
 	return False
@@ -234,12 +226,22 @@ def process_comment(comment):
 def process_link(link, thing):
 	for f in link_filters:
 		results = f.process_link(link, thing)
-		print("  Link filter results: {}".format(results))
 		if results and results[0]:
 			return results
 	return False
 
-def _send_messages(messages, thing=None):
+def process_filter_results(results, thing):
+	if results and len(results) == 2 and results[0]:
+		if results[0] <= FilterResult.REMOVE:
+			thing.remove()
+		if results[0] <= FilterResult.MESSAGE:
+			_send_messages(results[1], thing)
+		if results[0] <= FilterResult.LOG:
+			_log_result(results[1], thing)
+		return True
+	return False
+
+def _send_messages(messages, thing):
 	#TODO: post/comment info replacement
 	
 	if "modmail" in messages:
@@ -260,7 +262,7 @@ def _send_messages(messages, thing=None):
 			#from_sr = thing.subreddit if len(messages["pm"]) > 2 and messages["pm"][2] else None
 			reddit_util.send_pm(r, author, title, body)
 
-def _log_result(messages):
+def _log_result(messages, thing):
 	if "log" in messages:
 		title = messages["log"][0]
 		body = messages["log"][1]
@@ -271,13 +273,35 @@ def _log_result(messages):
 running = True
 waitEvent = Event()
 
-post_cache = load_cached_storage(config.post_cache_file)
-comment_cache = load_cached_storage(config.comment_cache_file)
+def update_filters():
+	def do_result(result_tuple):
+		if len(result_tuple) == 3:
+			process_filter_results((result_tuple[0], result_tuple[1]), result_tuple[2])
+	
+	for f in all_filters:
+		try:
+			results = f.update()
+			if results:
+				if isinstance(results, list):
+					for result in results:
+						do_result(result)
+				else:
+					do_result(results)
+			
+		except Exception as e:
+			ex_type, ex, tb = sys.exc_info()
+			print("Error: Filter update unexpectedly failed for {} ({})".format(f.filter_id, e))
+			traceback.print_tb(tb)
+			del tb
 
 def process_loop():
 	# Get reddit connection
 	global r
 	r = reddit_util.init_reddit_session()
+	
+	# Create/load caches
+	post_cache = load_cached_storage(config.post_cache_file)
+	comment_cache = load_cached_storage(config.comment_cache_file)
 	
 	# Go! Go! Go!
 	while running:
@@ -299,15 +323,12 @@ def process_loop():
 			
 			# Initialize filters if non-initialized or requested
 			if update:
-				print("Updating filters...", end=" ")
 				init_filters()
-				print("done!")
 			
 			# Do some moderation!
 			subreddit = r.get_subreddit(config.subreddit)
 			
-			for f in all_filters:
-				f.update()
+			update_filters()
 			
 			#print("Processing new posts...", end=" ")
 			new_posts = reddit_util.get_all_new(subreddit)
@@ -339,6 +360,9 @@ def process_loop():
 		if running:
 			if waitEvent.wait(timeout=20):
 				break
+	
+	post_cache.save()
+	comment_cache.save()
 
 def main():
 	build_local_config()
@@ -380,9 +404,6 @@ def main():
 	print("Saving and cleaning up...", end=" ")
 	reddit_util.destroy_reddit_session(r)
 	
-	post_cache.save()
-	comment_cache.save()
-	
 	print("done!")
 
 #############
@@ -399,6 +420,9 @@ def extract_submission_links(markdown_text):
 		links.append(link)
 	
 	return links
+
+def fake_isinstance(obj_cls, cls):
+	return isinstance(obj_cls, cls) or cls.__name__ in list(map(lambda c: c.__name__, inspect.getmro(obj_cls)))
 
 if __name__ == "__main__":
 	main()

@@ -21,6 +21,14 @@ def is_youtube_link(link):
 			return True
 	return False
 
+def is_youtube_video(link):
+	if not is_youtube_link(link):
+		return False
+	match = _yt_video_pattern.findall(link)
+	if len(match) > 0:
+		return True
+	return False
+
 def get_youtube_channel(url):
 	match = _yt_channel_pattern.findall(url)
 	if len(match) > 0:
@@ -45,7 +53,6 @@ def _get_channel_from_video(video_id):
 		snippet = video_info["snippet"]
 		channelId = snippet["channelId"]
 		channelName = snippet["channelTitle"]
-		print("ID={}, name={}".format(channelId, channelName))
 		return channelId, channelName
 	
 	return None
@@ -94,10 +101,8 @@ def _youtube_request(request_url):
 	
 	url = request_url+"&key="+config.youtube_api_key
 	
-	print("Requesting YT URL: {}".format(url))
 	_yt_last_time = _requst_wait(_yt_last_time, 0)
 	response = requests.get(url, headers=_yt_headers)
-	print("  Status: {}".format(response.status_code))
 	
 	if response.status_code == 200:
 		#print("Success!")
@@ -105,7 +110,7 @@ def _youtube_request(request_url):
 		_yt_cache.store(request_url, good_stuff)
 		return good_stuff
 	else:
-		#print("Failure!")
+		print("YouTube request failed ({}): {}".format(response.status_code, url))
 		return None
 
 # Misc. helpers
