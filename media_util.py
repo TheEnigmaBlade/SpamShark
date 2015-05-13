@@ -14,20 +14,24 @@ _yt_video_pattern = re.compile("(?:youtube\.com/(?:(?:watch|attribution_link)\?.
 _yt_playlist_pattern = re.compile("youtube\.com/playlist\?list=([a-zA-Z0-9-_]+)")
 _yt_channel_pattern = re.compile("youtube\.com/(?:channel|user)/([a-zA-Z0-9-_]+)")
 
-def is_youtube_link(link):
-	link = link.lower()
+def is_youtube_link(url):
+	url = url.lower()
 	for sig in _yt_sigs:
-		if sig in link:
+		if sig in url:
 			return True
 	return False
 
-def is_youtube_video(link):
-	if not is_youtube_link(link):
+def is_youtube_video(url):
+	if not is_youtube_link(url):
 		return False
-	match = _yt_video_pattern.findall(link)
+	video_id = get_youtube_video_id(url)
+	return not video_id is None
+
+def get_youtube_video_id(url):
+	match = _yt_video_pattern.findall(url)
 	if len(match) > 0:
-		return True
-	return False
+		return match[0]
+	return None
 
 def get_youtube_channel(url):
 	match = _yt_channel_pattern.findall(url)
@@ -78,10 +82,8 @@ def _get_channel_from_playlist(playlist_id):
 	return author_info
 
 def get_youtube_video_description(url):
-	match = _yt_video_pattern.findall(url)
-	if len(match) > 0:
-		video_id = match[0]
-		
+	video_id = get_youtube_video_id(url)
+	if not video_id is None:
 		url = _yt_video_url.format(type="snippet", id=video_id)
 		response = _youtube_request(url)
 		if response is None:
@@ -93,6 +95,9 @@ def get_youtube_video_description(url):
 			return description
 	
 	return None
+
+def get_youtube_uploader_comments(url):
+	pass
 
 def _youtube_request(request_url):
 	global _yt_last_time

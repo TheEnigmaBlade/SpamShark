@@ -242,22 +242,26 @@ def process_filter_results(results, thing):
 	return False
 
 def _send_messages(messages, thing):
-	#TODO: post/comment info replacement
+	author = "/u/"+thing.author.name
+	permalink =  reddit_util.reduce_reddit_link(thing.permalink)
+	#TODO: more info
+	def replace_info(text):
+		return text.format(author=author, permalink=permalink)
 	
 	if "modmail" in messages:
-		title = "[SpamShark] "+messages["modmail"][0]
-		body = messages["modmail"][1]
+		title = "[SpamShark] "+replace_info(messages["modmail"][0])
+		body = replace_info(messages["modmail"][1])
 		reddit_util.send_modmail(r, config.subreddit, title, body)
 	if not thing is None:
 		if "reply" in messages:
 			#TODO: test this
-			body = messages["reply"]
+			body = replace_info(messages["reply"])
 			reddit_util.reply_to(thing, body)
 		if "pm" in messages:
 			#TODO: test this
 			author = thing.author.name
-			title = messages["pm"][0]
-			body = messages["pm"][1]
+			title = replace_info(["pm"][0])
+			body = replace_info(messages["pm"][1])
 			# TODO: see if current subreddit can be pulled from post/comment
 			#from_sr = thing.subreddit if len(messages["pm"]) > 2 and messages["pm"][2] else None
 			reddit_util.send_pm(r, author, title, body)
@@ -309,40 +313,35 @@ def process_loop():
 			r = reddit_util.renew_reddit_session(r)
 			
 			# Check for update messages
-			#print("Checking for messages...", end=" ")
-			update = len(all_filters) == 0					# Guarantee update if on first iteration (assuming filters exist)
+			update = len(all_filters) == 0			# Guarantee update if on first iteration (assuming filters exist)
 			unread = r.get_unread(limit=None)
 			for message in unread:
-				print("New message: {}".format(message))
 				message.mark_as_read()
 				
 				if message.subject.lower() == config.subreddit and message.body == "update" \
 						and (len(config.config_whitelist) == 0 or message.author.name.lower() in config.config_whitelist):
+					print("Update message received from {}".format(message.author.name))
 					update = True
-			#print("done!")
 			
 			# Initialize filters if non-initialized or requested
 			if update:
 				init_filters()
 			
+			# Let filters do their update things
+			update_filters()
+			
 			# Do some moderation!
 			subreddit = r.get_subreddit(config.subreddit)
 			
-			update_filters()
-			
-			#print("Processing new posts...", end=" ")
 			new_posts = reddit_util.get_all_new(subreddit)
 			new_posts = post_cache.get_diff(new_posts)
 			for post in new_posts:
 				process_post(post)
-			#print("done!")
 			
-			#print("Processing new comments...", end=" ")
 			new_comments = reddit_util.get_all_comments(subreddit)
 			new_comments = comment_cache.get_diff(new_comments)
 			for comment in new_comments:
 				process_comment(comment)
-			#print("done!")
 			
 		except (ModeratorRequired, ModeratorOrScopeRequired, HTTPError) as e:
 			if not isinstance(e, HTTPError) or e.response.status_code == 403:
@@ -382,6 +381,11 @@ def main():
 				print("Stopping...")
 				running = False
 				waitEvent.set()
+			elif cmd == "status":
+				if running:
+					print("I'm not dead yet!")
+				else:
+					print("Well now he's dead.")
 			else:
 				print("Command \""+cmds[0]+"\" not found")
 		

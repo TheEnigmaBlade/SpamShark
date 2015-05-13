@@ -43,30 +43,24 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 	@staticmethod
 	def _get_ban_info(channel_info, thing):
 		channel_id, channel_name = channel_info
-		user = thing.author.name
-		permalink = thing.permalink
-		
 		title = "Banned YouTube channel: {}".format(channel_name)
 		body = "A banned channel was removed.\n\n" \
-				"* Channel: {} ({})\n" \
-				"* User: /u/{}\n" \
-				"* Permalink: {}" \
-					.format(channel_name, channel_id, user, reddit_util.reduce_reddit_link(permalink))
+				"* Channel: {channel_name} ({channel_id})\n" \
+				"* User: {author}\n" \
+				"* Permalink: {permalink}" \
+					.format(channel_name=channel_name, channel_id=channel_id)
 		
 		return {"log": (title, body), "modmail": (title, body)}
 	
 	@staticmethod
 	def _get_watch_info(channel_info, thing):
 		channel_id, channel_name = channel_info
-		user = thing.author.name
-		permalink = thing.permalink
-		
 		title = "Monitored YouTube channel: {}".format(channel_name)
 		body = "A monitored channel was submitted.\n\n" \
-				"* Channel: {} ({})\n" \
-				"* User: /u/{}\n" \
-				"* Permalink: {}" \
-					.format(channel_name, channel_id, user, permalink)
+				"* Channel: {channel_name} ({channel_id})\n" \
+				"* User: {author}\n" \
+				"* Permalink: {permalink}" \
+					.format(channel_name=channel_name, channel_id=channel_id)
 		
 		return {"log": (title, body)}
 
@@ -82,17 +76,13 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 		for url, post in to_check:
 			#TODO: check uploader comments
 			desc = media_util.get_youtube_video_description(url)
-			print(desc)
 			if "reddit.com" in desc or "redd.it" in desc:
-				user = post.author.name
-				permalink = post.permalink
-				
 				title = "Possible YouTube vote solicitation"
 				body = "Check the video description to see if they're asking for upvotes.\n\n" \
-					   "* Video: {}\n" \
-					   "* User: {}\n" \
-					   "* Permalink: {}\n" \
-					   		.format(url, user, reddit_util.reduce_reddit_link(permalink))
+					   "* Video: {video_url}\n" \
+					   "* User: {author}\n" \
+					   "* Permalink: {permalink}\n" \
+					   		.format(video_url=url)
 				return FilterResult.MESSAGE, {"modmail": (title, body)}, post
 	
 	def process_post(self, post):
