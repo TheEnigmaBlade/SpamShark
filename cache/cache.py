@@ -50,7 +50,7 @@ class TimedObjCache(Cache):
 			data, added = self._data[key]
 			time_since = time() - added
 			if time_since >= self.expiration:
-				old.append((key, self._data[key]))
+				old.append((key, data))
 				del self._data[key]
 			else:
 				break

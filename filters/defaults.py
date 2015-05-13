@@ -79,14 +79,11 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 	def update(self):
 		to_check = self.post_cache._prune()
 		
-		if len(to_check) > 0:
-			print("Checking descriptions of {} videos".format(len(to_check)))
-			
 		for url, post in to_check:
-			print("  URL: ".format(url))
+			#TODO: check uploader comments
 			desc = media_util.get_youtube_video_description(url)
+			print(desc)
 			if "reddit.com" in desc or "redd.it" in desc:
-				print("    WOW! Vote solicitation!")
 				user = post.author.name
 				permalink = post.permalink
 				
@@ -100,6 +97,5 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 	
 	def process_post(self, post):
 		if not post.is_self and media_util.is_youtube_video(post.url):
-			print("Storing video for later!")
 			self.post_cache.store(post.url, post)
 		return False

@@ -47,6 +47,8 @@ def _get_channel_from_video(video_id):
 	response = _youtube_request(url)
 	if response is None:
 		return None
+	if len(response["items"]) == 0:
+		return None
 	
 	video_info = response["items"][0]
 	if video_info["kind"] == "youtube#video" and "snippet" in video_info:	# Sanity check
