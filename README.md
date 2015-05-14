@@ -11,6 +11,12 @@ Modularized reddit moderation bot with a focus on spam prevention.
 
 ## Getting started
 
+#### Dependencies
+
+* Python 3.4+
+* praw
+* PyYAML
+
 #### Default filters
 
 * YouTube channel bans: `youtube-channel`
