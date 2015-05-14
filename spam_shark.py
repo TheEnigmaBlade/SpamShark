@@ -245,23 +245,20 @@ def _send_messages(messages, thing):
 	author = "/u/"+thing.author.name
 	permalink =  reddit_util.reduce_reddit_link(thing.permalink)
 	#TODO: more info
-	def replace_info(text):
-		return text.format(author=author, permalink=permalink)
-	
 	if "modmail" in messages:
-		title = "[SpamShark] "+replace_info(messages["modmail"][0])
-		body = replace_info(messages["modmail"][1])
+		title = "[SpamShark] "+safe_format(messages["modmail"][0], author=author, permalink=permalink)
+		body = safe_format(messages["modmail"][1], author=author, permalink=permalink)
 		reddit_util.send_modmail(r, config.subreddit, title, body)
 	if not thing is None:
 		if "reply" in messages:
 			#TODO: test this
-			body = replace_info(messages["reply"])
+			body = safe_format(messages["reply"], author=author, permalink=permalink)
 			reddit_util.reply_to(thing, body)
 		if "pm" in messages:
 			#TODO: test this
 			author = thing.author.name
-			title = replace_info(["pm"][0])
-			body = replace_info(messages["pm"][1])
+			title = safe_format(["pm"][0], author=author, permalink=permalink)
+			body = safe_format(messages["pm"][1], author=author, permalink=permalink)
 			# TODO: see if current subreddit can be pulled from post/comment
 			#from_sr = thing.subreddit if len(messages["pm"]) > 2 and messages["pm"][2] else None
 			reddit_util.send_pm(r, author, title, body)
@@ -427,6 +424,13 @@ def extract_submission_links(markdown_text):
 
 def fake_isinstance(obj_cls, cls):
 	return isinstance(obj_cls, cls) or cls.__name__ in list(map(lambda c: c.__name__, inspect.getmro(obj_cls)))
+
+class _SafeDict(dict):
+		def __missing__(self, key):
+			return '{' + key + '}'
+
+def safe_format(text, **kwargs):
+	return text.format_map(_SafeDict(**kwargs))
 
 if __name__ == "__main__":
 	main()

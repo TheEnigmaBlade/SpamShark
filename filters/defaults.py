@@ -1,4 +1,4 @@
-from spam_shark import Filter, FilterResult, LinkFilter, PostFilter
+from spam_shark import Filter, FilterResult, LinkFilter, PostFilter, safe_format
 import media_util
 from cache.cache import TimedObjCache
 import config
@@ -48,8 +48,8 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 		body = "A banned channel was removed.\n\n" \
 				"* Channel: {channel_name} ({channel_id})\n" \
 				"* User: {author}\n" \
-				"* Permalink: {permalink}" \
-					.format(channel_name=channel_name, channel_id=channel_id)
+				"* Permalink: {permalink}"
+		body = safe_format(body, channel_name=channel_name, channel_id=channel_id)
 		
 		return {"log": (title, body), "modmail": (title, body)}
 	
@@ -60,8 +60,8 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 		body = "A monitored channel was submitted.\n\n" \
 				"* Channel: {channel_name} ({channel_id})\n" \
 				"* User: {author}\n" \
-				"* Permalink: {permalink}" \
-					.format(channel_name=channel_name, channel_id=channel_id)
+				"* Permalink: {permalink}"
+		body = safe_format(body, channel_name=channel_name, channel_id=channel_id)
 		
 		return {"log": (title, body)}
 
@@ -77,15 +77,16 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 		for url, post in to_check:
 			# Video description
 			desc = media_util.get_youtube_video_description(url)
-			if self._wow_such_vote_solicitation(desc):
+			if not desc is None and self._wow_such_vote_solicitation(desc):
 				return self._get_response(url, post)
 			
 			# Video comments
 			# Might be better to only check uploader comments
 			comments = media_util.get_youtube_comments(url)
-			for comment in comments:
-				if self._wow_such_vote_solicitation(comment):
-					return self._get_response(url, post)
+			if not comments is None:
+				for comment in comments:
+					if self._wow_such_vote_solicitation(comment):
+						return self._get_response(url, post)
 		
 		return False
 	
@@ -104,6 +105,7 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 		body = "Check the video description to see if they're asking for upvotes.\n\n" \
 			   "* Video: {video_url}\n" \
 			   "* User: {author}\n" \
-			   "* Permalink: {permalink}\n" \
-			   		.format(video_url=video_url)
+			   "* Permalink: {permalink}\n"
+		body = safe_format(body, video_url=video_url)
+		
 		return FilterResult.MESSAGE, {"modmail": (title, body)}, post

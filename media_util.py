@@ -11,7 +11,7 @@ _yt_comments_url = "https://www.googleapis.com/youtube/v3/commentThreads?part={t
 _yt_last_time = 0
 _yt_cache = TimedObjCache(expiration=1800)	# 30 min
 
-_yt_video_pattern = re.compile("(?:youtube\.com/(?:(?:watch|attribution_link)\?.*v(?:=|%3D)|embed/)|youtu\.be/)([a-zA-Z0-9-_]+)")
+_yt_video_pattern = re.compile("(?:youtube\.com/(?:(?:watch|attribution_link)\?.*v(?:=|%3D)|embed/)|youtu\.be/)([a-zA-Z0-9-_]{11})")
 _yt_playlist_pattern = re.compile("youtube\.com/playlist\?list=([a-zA-Z0-9-_]+)")
 _yt_channel_pattern = re.compile("youtube\.com/(?:channel|user)/([a-zA-Z0-9-_]+)")
 
@@ -25,11 +25,23 @@ def is_youtube_link(url):
 def is_youtube_video(url):
 	if not is_youtube_link(url):
 		return False
-	video_id = get_youtube_video_id(url)
+	video_id = _get_youtube_video_id(url)
 	return not video_id is None
 
-def get_youtube_video_id(url):
+def _get_youtube_video_id(url):
 	match = _yt_video_pattern.findall(url)
+	if len(match) > 0:
+		return match[0]
+	return None
+
+def is_youtube_playlist(url):
+	if not is_youtube_link(url):
+		return False
+	video_id = _get_youtube_playlist_id(url)
+	return not video_id is None
+
+def _get_youtube_playlist_id(url):
+	match = _yt_playlist_pattern.findall(url)
 	if len(match) > 0:
 		return match[0]
 	return None
@@ -39,13 +51,13 @@ def get_youtube_channel(url):
 	if len(match) > 0:
 		return match[0], None
 	
-	match = _yt_video_pattern.findall(url)
-	if len(match) > 0:
-		return _get_channel_from_video(match[0])
+	ytid = _get_youtube_video_id(url)
+	if not ytid is None:
+		return _get_channel_from_video(ytid)
 	
-	match = _yt_playlist_pattern.findall(url)
-	if len(match) > 0:
-		return _get_channel_from_playlist(match[0])
+	ytid = _get_youtube_playlist_id(url)
+	if not ytid is None:
+		return _get_channel_from_playlist(ytid)
 
 def _get_channel_from_video(video_id):
 	url = _yt_video_url.format(type="snippet", id=video_id)
@@ -81,7 +93,7 @@ def _get_channel_from_playlist(playlist_id):
 	return author_info
 
 def get_youtube_video_description(url):
-	video_id = get_youtube_video_id(url)
+	video_id = _get_youtube_video_id(url)
 	if not video_id is None:
 		url = _yt_video_url.format(type="snippet", id=video_id)
 		response = _youtube_request(url)
@@ -96,7 +108,7 @@ def get_youtube_video_description(url):
 	return None
 
 def get_youtube_comments(url):
-	video_id = get_youtube_video_id(url)
+	video_id = _get_youtube_video_id(url)
 	if not video_id is None:
 		url = _yt_comments_url.format(type="snippet", id=video_id)
 		response = _youtube_request(url)
