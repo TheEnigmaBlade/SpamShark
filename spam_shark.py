@@ -159,6 +159,7 @@ def init_filters():
 	for f in all_filters:
 		print("\nConfiguring {}".format(f.filter_id))
 		print("--------------------")
+		
 		f_configs = configs[f.filter_id] if f.filter_id in configs else []
 		try:
 			error = f.init_filter(f_configs)
@@ -177,8 +178,6 @@ def init_filters():
 # Processing
 
 def process_post(post):
-	
-	
 	# Check post filters first
 	for f in post_filters:
 		results = f.process_post(post)
@@ -430,8 +429,8 @@ def fake_isinstance(obj_cls, cls):
 	return isinstance(obj_cls, cls) or cls.__name__ in list(map(lambda c: c.__name__, inspect.getmro(obj_cls)))
 
 class _SafeDict(dict):
-		def __missing__(self, key):
-			return '{' + key + '}'
+	def __missing__(self, key):
+		return '{' + key + '}'
 
 def safe_format(text, **kwargs):
 	return text.format_map(_SafeDict(**kwargs))
