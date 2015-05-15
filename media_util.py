@@ -1,5 +1,5 @@
 import requests, re
-from cache.cache import TimedObjCache
+from cache import TimedObjCache
 import config
 
 # YouTube utilities

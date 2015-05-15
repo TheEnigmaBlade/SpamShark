@@ -84,6 +84,8 @@ All message texts (title and body) are auto-formatted with basic post informatio
 
 Filters can be configured through a subreddit wiki page (defaults to `/wiki/spamshark`) using YAML syntax. Exact format of a configuration section depends on the filter, but every section **must specify a filter ID** to which the config applies.
 
+After the configuration page is edited, send a PM to the bot account with the name of the subreddit as a subject and "update" in the body.
+
 Example using the template above:
 
 ```yaml

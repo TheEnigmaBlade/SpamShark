@@ -1,5 +1,4 @@
-import praw
-import requests
+import praw, requests
 from requests.auth import HTTPBasicAuth
 import re
 from time import time
@@ -78,12 +77,12 @@ def renew_reddit_session(r):
 _last_new = None
 _last_new_time = -1
 
-def get_all_new(subreddit):
+def get_all_new(subreddit, limit=200):
 	global _last_new, _last_new_time
 	posts = []
 	
 	after = None
-	while len(posts) < 200:
+	while len(posts) < limit:
 		new_posts = list(subreddit.get_new(limit=100, params={"after": "t3_"+after if after else None}))
 		posts.extend(new_posts)
 		after = posts[-1].id
@@ -101,12 +100,12 @@ def get_all_new(subreddit):
 _last_comment = None
 _last_comment_time = -1
 
-def get_all_comments(subreddit):
+def get_all_comments(subreddit, limit=300):
 	global _last_comment, _last_comment_time
 	comments = []
 	
 	after = None
-	while len(comments) < 300:
+	while len(comments) < limit:
 		new_comments = list(subreddit.get_comments(limit=100, params={"after": "t1_"+after if after else None}))
 		comments.extend(new_comments)
 		after = comments[-1].id

@@ -2,12 +2,15 @@
 from abc import ABCMeta, abstractmethod
 from enum import IntEnum, unique
 from requests import HTTPError
-import sys, yaml, re, traceback, inspect
+import os, sys, yaml, re, traceback, inspect
 from threading import Thread, Event
 from praw.errors import ModeratorRequired, ModeratorOrScopeRequired
 
 import config, reddit_util
-from cache.cache import load_cached_storage
+from cache import load_cached_storage
+
+import warnings
+warnings.simplefilter("ignore", ResourceWarning)
 
 # Globals
 r = None
@@ -56,10 +59,10 @@ def get_filters():
 	import importlib
 	
 	filters = []
-	files = glob.glob("filters/*.py")
+	files = glob.glob(config.filter_location+"/*.py")
 	for file in files:
 		name = os.path.splitext(os.path.basename(file))[0]
-		module = importlib.import_module("filters." + name)
+		module = importlib.import_module(config.filter_location+"." + name)
 		for member in dir(module):
 			if member.startswith("__") \
 					or member == "Filter" \
@@ -264,7 +267,7 @@ def _send_messages(messages, thing):
 			reddit_util.send_pm(r, author, title, body)
 
 def _log_result(messages, thing):
-	if "log" in messages:
+	if "log" in messages and not config.log_subreddit is None and len(config.log_subreddit) > 0:
 		title = messages["log"][0]
 		body = messages["log"][1]
 		reddit_util.submit_text_post(r, config.log_subreddit, title, body)
@@ -301,8 +304,9 @@ def process_loop():
 	r = reddit_util.init_reddit_session()
 	
 	# Create/load caches
-	post_cache = load_cached_storage(config.post_cache_file)
-	comment_cache = load_cached_storage(config.comment_cache_file)
+	os.makedirs(config.cache_location, exist_ok=True)
+	post_cache = load_cached_storage(config.cache_location+"/posts.cache")
+	comment_cache = load_cached_storage(config.cache_location+"/comments.cache")
 	
 	# Go! Go! Go!
 	while running:

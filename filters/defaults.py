@@ -1,6 +1,6 @@
 from spam_shark import Filter, FilterResult, LinkFilter, PostFilter, safe_format
 import media_util
-from cache.cache import TimedObjCache
+from cache import TimedObjCache
 import config
 
 class YouTubeChannelFilter(Filter, LinkFilter):
