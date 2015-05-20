@@ -59,17 +59,21 @@ Defined in module `spam_shark`
   
 * `CommentFilter`: Requires definition of `process_comment(self, comment)`
 
+* `MessageFilter`: Requires definition of `process_message(self, message)`
+
 #### Available filter results
 
 Defined in enum `spam_shark.FilterResult`
 
 * `REMOVE`: Removes the processed thing, performs message actions, and logs the action
-* `MESSAGE`: Performs message actions and logs the action
+* `MESSAGE` or `FLAIR`: Performs message actions (including flair) and logs the action
 
   Requires one or more of the following defined in message actions:
-  * ```"modmail": (modmail_title, modmail_body)```
-  * ```"reply": reply_body```
-  * ```"pm": (pm_title, pm_body)```
+  * `"modmail": (modmail_title, modmail_body)`
+  * `"reply": reply_body`
+  * `"pm": (pm_title, pm_body)`
+  * `"flair_user": (flair_text, flair_css_class)`
+  * `"flair_post": (flair_text, flair_css_class)` (only applies to posts)
 
 * `LOG`: Logs the action
 
@@ -79,6 +83,9 @@ All message texts (title and body) are auto-formatted with basic post informatio
 
 * `author`
 * `permalink`
+* `title`: Not available for comment actions.
+* `body`
+* `link`: Only available on posts (empty if self post).
 
 #### Filter configuration
 

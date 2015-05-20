@@ -1,3 +1,5 @@
+__author__ = "Enigma"
+
 from spam_shark import Filter, FilterResult, LinkFilter, PostFilter, safe_format
 import media_util
 from cache import TimedObjCache
@@ -5,6 +7,9 @@ import config
 
 class YouTubeChannelFilter(Filter, LinkFilter):
 	filter_id = "youtube-channel"
+	filter_name = "YouTube Channel Bans and Monitors"
+	filter_descr = ""
+	filter_author = "Enigma"
 	
 	ban_list = []
 	watch_list = []
@@ -35,14 +40,14 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 			else:
 				# Check channel ID and name
 				if channel_info[0] in self.ban_list or channel_info[1] in self.ban_list:
-					return FilterResult.REMOVE, self._get_ban_info(channel_info, thing)
+					return FilterResult.REMOVE, self._get_ban_info(channel_info)
 				if channel_info[0] in self.watch_list or channel_info[1] in self.watch_list:
-					return FilterResult.MESSAGE, self._get_watch_info(channel_info, thing)
+					return FilterResult.MESSAGE, self._get_watch_info(channel_info)
 				
 		return False
 	
 	@staticmethod
-	def _get_ban_info(channel_info, thing):
+	def _get_ban_info(channel_info):
 		channel_id, channel_name = channel_info
 		title = "Banned YouTube channel: {}".format(channel_name)
 		body = "A banned channel was removed.\n\n" \
@@ -54,7 +59,7 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 		return {"log": (title, body), "modmail": (title, body)}
 	
 	@staticmethod
-	def _get_watch_info(channel_info, thing):
+	def _get_watch_info(channel_info):
 		channel_id, channel_name = channel_info
 		title = "Monitored YouTube channel: {}".format(channel_name)
 		body = "A monitored channel was submitted.\n\n" \
@@ -67,6 +72,9 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 
 class YouTubeVoteManipFilter(Filter, PostFilter):
 	filter_id = "youtube-votemanip"
+	filter_name = "YouTube Vote Manipulation Monitoring"
+	filter_descr = ""
+	filter_author = "Enigma"
 	
 	def init_filter(self, configs):
 		self.post_cache = TimedObjCache(expiration=300)

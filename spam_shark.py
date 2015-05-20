@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from abc import ABCMeta, abstractmethod
-from enum import IntEnum, unique
+from enum import IntEnum
 from requests import HTTPError
 import os, sys, yaml, re, traceback, inspect
 from threading import Thread, Event
@@ -97,9 +97,9 @@ class Filter(metaclass=ABCMeta):
 	def update(self):
 		pass
 
-@unique
 class FilterResult(IntEnum):
 	REMOVE = 1
+	FLAIR = 2
 	MESSAGE = 2
 	LOG = 3
 
@@ -121,6 +121,11 @@ class CommentFilter(metaclass=ABCMeta):
 	def process_comment(self, comment):
 		return False
 
+class MessageFilter(metaclass=ABCMeta):
+	@abstractmethod
+	def process_message(self, message):
+		return False
+
 ########
 # Main #
 ########
@@ -129,8 +134,9 @@ all_filters = []
 link_filters = []
 post_filters = []
 comment_filters = []
+pm_filters = []
 
-def init_filters():
+def init_filters(configure=True):
 	print("Loading filters...", end=" ")
 	
 	# Load filters if not already loaded
@@ -175,9 +181,24 @@ def init_filters():
 	
 	print("done!")
 
+def has_link_filters():
+	return len(link_filters) > 0
+
+def has_post_filters():
+	return len(post_filters) > 0
+
+def has_comment_filters():
+	return len(comment_filters) > 0
+
+def has_message_filters():
+	return len(pm_filters) > 0
+
 # Processing
 
 def process_post(post):
+	if not has_post_filters() and not has_link_filters():
+		return False
+	
 	# Check post filters first
 	for f in post_filters:
 		results = f.process_post(post)
@@ -204,6 +225,9 @@ def process_post(post):
 	return False
 
 def process_comment(comment):
+	if not has_comment_filters() and not has_link_filters():
+		return False
+	
 	# Check comment filters
 	for f in comment_filters:
 		results = f.process_comment(comment)
@@ -232,44 +256,95 @@ def process_link(link, thing):
 			return results
 	return False
 
+def process_message(message):
+	for f in pm_filters:
+		results = f.process_message(message)
+		if process_filter_results(results, message):
+			return True
+	return False
+
 def process_filter_results(results, thing):
 	if results and len(results) == 2 and results[0]:
 		if results[0] <= FilterResult.REMOVE:
 			thing.remove()
 		if results[0] <= FilterResult.MESSAGE:
 			_send_messages(results[1], thing)
+			_flair_thing(results[1], thing)
 		if results[0] <= FilterResult.LOG:
 			_log_result(results[1], thing)
 		return True
 	return False
 
 def _send_messages(messages, thing):
-	author = "/u/"+thing.author.name
-	permalink =  reddit_util.reduce_reddit_link(thing.permalink)
-	#TODO: more info
+	thing_info = _get_thing_info(thing)
+	def fmt(text):
+		return safe_format(text, **thing_info)
+	
 	if "modmail" in messages:
-		title = "[SpamShark] "+safe_format(messages["modmail"][0], author=author, permalink=permalink)
-		body = safe_format(messages["modmail"][1], author=author, permalink=permalink)
+		title = "[SpamShark] "+fmt(messages["modmail"][0])
+		body = fmt(messages["modmail"][1])
 		reddit_util.send_modmail(r, config.subreddit, title, body)
 	if not thing is None:
 		if "reply" in messages:
 			#TODO: test this
-			body = safe_format(messages["reply"], author=author, permalink=permalink)
+			body = fmt(messages["reply"])
 			reddit_util.reply_to(thing, body)
 		if "pm" in messages:
 			#TODO: test this
 			author = thing.author.name
-			title = safe_format(["pm"][0], author=author, permalink=permalink)
-			body = safe_format(messages["pm"][1], author=author, permalink=permalink)
-			# TODO: see if current subreddit can be pulled from post/comment
-			#from_sr = thing.subreddit if len(messages["pm"]) > 2 and messages["pm"][2] else None
-			reddit_util.send_pm(r, author, title, body)
+			title = fmt(["pm"][0])
+			body = fmt(messages["pm"][1])
+			from_sr = thing.subreddit.display_name if len(messages["pm"]) > 2 and messages["pm"][2] and hasattr(thing, "subreddit") else None
+			reddit_util.send_pm(r, author, title, body, from_sr=from_sr)
+
+def _flair_thing(messages, thing):
+	if not thing is None:
+		if "flair_user" in messages:
+			author = thing.author
+			flair_text = messages["flair_user"][0]
+			flair_css = messages["flair_user"][1]
+			reddit_util.set_flair(r, config.subreddit, author, flair_text, flair_css)
+		if "flair_post" in messages and reddit_util.is_post(thing):
+			flair_text = messages["flair_post"][0]
+			flair_css = messages["flair_post"][1]
+			reddit_util.set_flair(r, config.subreddit, thing, flair_text, flair_css)
 
 def _log_result(messages, thing):
+	thing_info = _get_thing_info(thing)
+	def fmt(text):
+		return safe_format(text, **thing_info)
+	
 	if "log" in messages and not config.log_subreddit is None and len(config.log_subreddit) > 0:
-		title = messages["log"][0]
-		body = messages["log"][1]
+		title = fmt(messages["log"][0])
+		body = fmt(messages["log"][1])
 		reddit_util.submit_text_post(r, config.log_subreddit, title, body)
+
+def _get_thing_info(thing):
+	if reddit_util.is_post(thing):
+		return {
+			"author": "/u/"+thing.author.name,
+			"permalink": reddit_util.reduce_reddit_link(thing.permalink),
+			"title": thing.title,
+			"body": thing.selftext if thing.is_self else "",
+			"link": thing.url if not thing.is_self else ""
+		}
+	if reddit_util.is_comment(thing):
+		return {
+			"author": "/u/"+thing.author.name,
+			"permalink": reddit_util.reduce_reddit_link(thing.permalink),
+			"body": thing.body,
+		}
+	if reddit_util.is_message(thing):
+		print("IT'S A MESSAGE!")
+		from pprint import pprint
+		pprint(vars(thing))
+		return {
+			"author": "/u/"+thing.author.name,
+			"permalink": reddit_util.reduce_reddit_link(thing.permalink),
+			"title": thing.title,
+			"body": thing.body,
+		}
+	return {}
 
 # Actual main
 
@@ -315,6 +390,7 @@ def process_loop():
 			# Check for update messages
 			update = len(all_filters) == 0			# Guarantee update if on first iteration (assuming filters exist)
 			unread = r.get_unread(limit=None)
+			new_messages = list()
 			for message in unread:
 				message.mark_as_read()
 				
@@ -322,6 +398,8 @@ def process_loop():
 						and (len(config.config_whitelist) == 0 or message.author.name.lower() in config.config_whitelist):
 					print("Update message received from {}".format(message.author.name))
 					update = True
+				else:
+					new_messages.append(message)
 			
 			# Initialize filters if non-initialized or requested
 			if update:
@@ -333,11 +411,17 @@ def process_loop():
 			# Do some moderation!
 			subreddit = r.get_subreddit(config.subreddit)
 			
+			## Messages
+			for message in new_messages:
+				process_message(message)
+			
+			## Posts
 			new_posts = reddit_util.get_all_new(subreddit)
 			new_posts = post_cache.get_diff(new_posts)
 			for post in new_posts:
 				process_post(post)
 			
+			## Comments
 			new_comments = reddit_util.get_all_comments(subreddit)
 			new_comments = comment_cache.get_diff(new_comments)
 			for comment in new_comments:
@@ -433,7 +517,22 @@ class _SafeDict(dict):
 		return '{' + key + '}'
 
 def safe_format(text, **kwargs):
-	return text.format_map(_SafeDict(**kwargs))
+	return text.format_map(_SafeDict(kwargs))
+
+###########
+# Running #
+###########
 
 if __name__ == "__main__":
-	main()
+	import argparse
+	
+	parser = argparse.ArgumentParser()
+	parser.add_argument("listfilters", action="store_true", required=False, dest="list_filters")
+	args = parser.parse_args()
+	
+	if args.list_filters:
+		init_filters(configure=False)
+		for f in all_filters:
+			print(f.filter_id)
+	else:
+		main()

@@ -100,13 +100,13 @@ def get_all_new(subreddit, limit=200):
 _last_comment = None
 _last_comment_time = -1
 
-def get_all_comments(subreddit, limit=300):
+def get_all_comments(subreddit_or_user, limit=300):
 	global _last_comment, _last_comment_time
 	comments = []
 	
 	after = None
 	while len(comments) < limit:
-		new_comments = list(subreddit.get_comments(limit=100, params={"after": "t1_"+after if after else None}))
+		new_comments = list(subreddit_or_user.get_comments(limit=100, params={"after": "t1_"+after if after else None}))
 		comments.extend(new_comments)
 		after = comments[-1].id
 		after_time = comments[-1].created_utc
@@ -117,6 +117,23 @@ def get_all_comments(subreddit, limit=300):
 	_last_comment = comments[0].id
 	_last_comment_time = comments[0].created_utc
 	return comments
+
+def get_all_submitted(user, limit=300):
+	_last_thing = None
+	_last_thing_time = -1
+	posts = []
+	
+	after = None
+	while len(posts) < limit:
+		new_posts = list(user.get_submitted(limit=100, params={"after": "t3_"+after if after else None}))
+		posts.extend(new_posts)
+		after = posts[-1].id
+		after_time = posts[-1].created_utc
+		
+		if len(new_posts) < 100 or after_time < _last_thing_time:
+			break
+	
+	return posts
 
 def get_wiki_page(subreddit, page):
 	# Workaround because the current version of PRAW can't access restricted wiki pages through oauth
@@ -161,6 +178,9 @@ def reply_to(thing, body):
 	elif isinstance(thing, praw.objects.Submission):
 		thing.add_comment(body)
 
+def set_flair(r, subreddit, thing, flair_text, flair_css):
+	r.set_flair()
+
 # Utilities
 
 redditReductionPattern = re.compile("https?://(?:.+\.)?(?:reddit\.com(?:(/r/\w+/comments/\w+/?)(?:(?:\w+/?)(.*))?|(?:(/(?:u|user|m|message|r/\w+)/.+)))|(redd.it/\w+))")
@@ -183,3 +203,12 @@ def reduce_reddit_link(link, include_prefix=False):
 			return prefix+match.group(6)
 	
 	return link
+
+def is_post(thing):
+	return isinstance(thing, praw.objects.Submission)
+
+def is_comment(thing):
+	return isinstance(thing, praw.objects.Comment)
+
+def is_message(thing):
+	return isinstance(thing, praw.objects.Message)

@@ -11,9 +11,9 @@ _yt_comments_url = "https://www.googleapis.com/youtube/v3/commentThreads?part={t
 _yt_last_time = 0
 _yt_cache = TimedObjCache(expiration=1800)	# 30 min
 
-_yt_video_pattern = re.compile("(?:youtube\.com/(?:(?:watch|attribution_link)\?.*v(?:=|%3D)|embed/)|youtu\.be/)([a-zA-Z0-9-_]{11})")
+_yt_video_pattern = re.compile("(?:youtube\.com/(?:(?:watch|attribution_link)\?(?:.*(?:&|%3F|&amp;))?v(?:=|%3D)|embed/)|youtu\.be/)([a-zA-Z0-9-_]{11})")
 _yt_playlist_pattern = re.compile("youtube\.com/playlist\?list=([a-zA-Z0-9-_]+)")
-_yt_channel_pattern = re.compile("youtube\.com/(?:channel|user)/([a-zA-Z0-9-_]+)")
+_yt_channel_pattern = re.compile("youtube\.com/(?:#/)?(?:channel|user)/([a-zA-Z0-9-_]+)")
 
 def is_youtube_link(url):
 	url = url.lower()
