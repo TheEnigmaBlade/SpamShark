@@ -1,5 +1,5 @@
 # Reddit connection
-useragent			= "script:SpamShark:v0.2 (by /u/TheEnigmaBlade)"
+useragent			= "script:SpamShark:v0.4 (by /u/TheEnigmaBlade)"
 username			= ""
 password			= ""
 oauth_id			= ""					# Create a "script" application here: https://www.reddit.com/prefs/apps/
