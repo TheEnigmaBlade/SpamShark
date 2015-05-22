@@ -8,7 +8,7 @@ import config
 class YouTubeChannelFilter(Filter, LinkFilter):
 	filter_id = "youtube-channel"
 	filter_name = "YouTube Channel Bans and Monitors"
-	filter_descr = ""
+	filter_descr = None
 	filter_author = "Enigma"
 	
 	ban_list = []
@@ -73,7 +73,7 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 class YouTubeVoteManipFilter(Filter, PostFilter):
 	filter_id = "youtube-votemanip"
 	filter_name = "YouTube Vote Manipulation Monitoring"
-	filter_descr = ""
+	filter_descr = None
 	filter_author = "Enigma"
 	
 	def init_filter(self, configs):
@@ -116,4 +116,4 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 			   "* Permalink: {permalink}\n"
 		body = safe_format(body, video_url=video_url)
 		
-		return FilterResult.MESSAGE, {"modmail": (title, body)}, post
+		return FilterResult.MESSAGE, {"log": (title, body), "modmail": (title, body)}, post

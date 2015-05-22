@@ -74,65 +74,64 @@ def renew_reddit_session(r):
 
 # Thing getting
 
-_last_new = None
 _last_new_time = -1
 
-def get_all_new(subreddit, limit=200):
-	global _last_new, _last_new_time
+def get_all_new(subreddit, limit=200, save_last=True):
+	global _last_new_time
 	posts = []
 	
 	after = None
 	while len(posts) < limit:
-		new_posts = list(subreddit.get_new(limit=100, params={"after": "t3_"+after if after else None}))
+		new_posts = list(subreddit.get_new(limit=100, params={"after": after}))
 		posts.extend(new_posts)
-		after = posts[-1].id
+		after = "t3_"+posts[-1].id
 		after_time = posts[-1].created_utc
 		
-		if len(new_posts) < 50 or after_time < _last_new_time:
+		if len(new_posts) < 50 or (save_last and after_time < _last_new_time):
 			break
-		#print("Getting new posts\n  Found={}\n  After={}\n  After time={}".format(len(posts), after, after_time))
 	
-	if len(posts) > 0:
-		_last_new = posts[0].id
+	if save_last and len(posts) > 0:
 		_last_new_time = posts[0].created_utc
 	return posts
 
-_last_comment = None
 _last_comment_time = -1
 
-def get_all_comments(subreddit_or_user, limit=300):
-	global _last_comment, _last_comment_time
+def get_all_comments(subreddit_or_user, limit=300, save_last=True):
+	global _last_comment_time
 	comments = []
 	
 	after = None
 	while len(comments) < limit:
-		new_comments = list(subreddit_or_user.get_comments(limit=100, params={"after": "t1_"+after if after else None}))
+		new_comments = list(subreddit_or_user.get_comments(limit=100, params={"after": after}))
 		comments.extend(new_comments)
-		after = comments[-1].id
+		after = "t1_"+comments[-1].id
 		after_time = comments[-1].created_utc
 		
-		if len(new_comments) < 100 or after_time < _last_comment_time:
+		if len(new_comments) < 100 or (save_last and after_time < _last_comment_time):
 			break
 	
-	_last_comment = comments[0].id
-	_last_comment_time = comments[0].created_utc
+	if save_last and len(comments) > 0:
+		_last_comment_time = comments[0].created_utc
 	return comments
 
-def get_all_submitted(user, limit=300):
-	_last_thing = None
-	_last_thing_time = -1
+_last_submitted_time = -1
+
+def get_all_submitted(user, limit=200, save_last=True):
+	global _last_submitted_time
 	posts = []
 	
 	after = None
 	while len(posts) < limit:
-		new_posts = list(user.get_submitted(limit=100, params={"after": "t3_"+after if after else None}))
+		new_posts = list(user.get_submitted(limit=100, params={"after": after}))
 		posts.extend(new_posts)
-		after = posts[-1].id
+		after = "t3_"+posts[-1].id
 		after_time = posts[-1].created_utc
 		
-		if len(new_posts) < 100 or after_time < _last_thing_time:
+		if len(new_posts) < 100 or (save_last and after_time < _last_submitted_time):
 			break
 	
+	if save_last and len(posts) > 0:
+		_last_submitted_time = posts[0].created_utc
 	return posts
 
 def get_wiki_page(subreddit, page):

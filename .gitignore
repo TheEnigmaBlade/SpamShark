@@ -113,3 +113,4 @@ crashlytics-build.properties
 venv
 data
 config-mine.py
+*~

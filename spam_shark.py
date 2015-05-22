@@ -13,6 +13,7 @@ import warnings
 warnings.simplefilter("ignore", ResourceWarning)
 
 # Globals
+version = "0.4"
 r = None
 
 ##################
@@ -136,17 +137,17 @@ post_filters = []
 comment_filters = []
 pm_filters = []
 
-def init_filters(configure=True):
-	print("Loading filters...", end=" ")
+def init_filters(configure=True, verbose=True):
+	if verbose: print("Loading filters...", end=" ")
 	
 	# Load filters if not already loaded
 	if len(all_filters) == 0:
 		new_filters = get_filters()
-		print("using {} filters...".format(len(new_filters)), end=" ")
+		if verbose: print("using {} filters...".format(len(new_filters)), end=" ")
 		
 		for nf_class in new_filters:
 			if nf_class.filter_id is None:
-				print("\n  Error: Filter {} must specify a filter_id\n".format(nf_class.__module__+"."+nf_class.__name__))
+				if verbose: print("\n  Error: Filter {} must specify a filter_id\n".format(nf_class.__module__+"."+nf_class.__name__))
 				continue
 			
 			if nf_class.filter_id in config.enabled_filters:
@@ -160,26 +161,28 @@ def init_filters(configure=True):
 					comment_filters.append(nf)
 	
 	# Initialize filters with wiki config
-	print("configuring filters...", end=" ")
-	configs = build_remote_config()
-	for f in all_filters:
-		print("\nConfiguring {}".format(f.filter_id))
-		print("--------------------")
-		
-		f_configs = configs[f.filter_id] if f.filter_id in configs else []
-		try:
-			error = f.init_filter(f_configs)
-			if error:
-				print("\n  Error: Filter configuration failed for {} ({})\n".format(f.filter_id, error))
-		except Exception as e:
-			ex_type, ex, tb = sys.exc_info()
-			print("Error: Filter configuration unexpectedly failed for {} ({})".format(f.filter_id, e))
-			traceback.print_tb(tb)
-			del tb
-		
-		print("--------------------")
+	if configure:
+		if verbose: print("configuring filters...", end=" ")
+		configs = build_remote_config()
+		for f in all_filters:
+			if verbose:
+				print("\nConfiguring {}".format(f.filter_id))
+				print("--------------------")
+			
+			f_configs = configs[f.filter_id] if f.filter_id in configs else []
+			try:
+				error = f.init_filter(f_configs)
+				if error and verbose:
+					print("\n  Error: Filter configuration failed for {} ({})\n".format(f.filter_id, error))
+			except Exception as e:
+				ex_type, ex, tb = sys.exc_info()
+				if verbose: print("Error: Filter configuration unexpectedly failed for {} ({})".format(f.filter_id, e))
+				traceback.print_tb(tb)
+				del tb
+			
+		if verbose: print("--------------------")
 	
-	print("done!")
+	if verbose: print("done!")
 
 def has_link_filters():
 	return len(link_filters) > 0
@@ -525,14 +528,23 @@ def safe_format(text, **kwargs):
 
 if __name__ == "__main__":
 	import argparse
-	
-	parser = argparse.ArgumentParser()
-	parser.add_argument("listfilters", action="store_true", required=False, dest="list_filters")
+	parser = argparse.ArgumentParser(description="SpamShark, modular reddit moderation bot")
+	parser.add_argument("-lf", "--listfilters", action="store_true", help="list available filters")
+	parser.add_argument("-v", "--version", action="version", version="SpamShark "+version)
 	args = parser.parse_args()
 	
-	if args.list_filters:
-		init_filters(configure=False)
-		for f in all_filters:
-			print(f.filter_id)
+	if args.listfilters:
+		init_filters(configure=False, verbose=False)
+		print("Available filters:\n------------------")
+		for i, f in enumerate(all_filters):
+			print("{}. {}".format(i+1, f.filter_id), end="")
+			if hasattr(f, "filter_name"):
+				print(": {}".format(f.filter_name))
+			else:
+				print()
+			if hasattr(f, "filter_descr") and not f.filter_descr is None:
+				print("  {}".format(f.filter_descr))
+			if hasattr(f, "filter_author") and not f.filter_author is None:
+				print("  Created by {}".format(f.filter_author))
 	else:
 		main()
