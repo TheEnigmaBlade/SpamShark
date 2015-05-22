@@ -99,5 +99,6 @@ Example using the template above:
 # Template configuration
 ---
     filter: "filter-template"
+    # Filter custom stuff
     # ...
 ```
