@@ -6,6 +6,12 @@ from cache import TimedObjCache
 import config
 
 class YouTubeChannelFilter(Filter, LinkFilter):
+	"""
+	Wiki configuration:
+		action: "ban" or "watch" [required]
+		ids: list of YouTube channel IDs or names [required]
+	"""
+	
 	filter_id = "youtube-channel"
 	filter_name = "YouTube Channel Bans and Monitors"
 	filter_descr = None
@@ -71,6 +77,11 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 		return {"log": (title, body)}
 
 class YouTubeVoteManipFilter(Filter, PostFilter):
+	"""
+	Wiki configuration:
+		None
+	"""
+	
 	filter_id = "youtube-votemanip"
 	filter_name = "YouTube Vote Manipulation Monitoring"
 	filter_descr = None

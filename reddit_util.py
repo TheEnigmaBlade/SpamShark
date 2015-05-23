@@ -5,7 +5,7 @@ from time import time
 
 # Initialization
 
-_oauth_scopes = {"identity", "edit", "modposts", "modwiki", "privatemessages", "read", "report", "wikiread", "submit"}
+_oauth_scopes = {"identity", "edit", "modposts", "modwiki", "privatemessages", "read", "report", "wikiread", "submit", "modcontributors"}
 _oauth_start = 0
 _oauth_length = 3300
 

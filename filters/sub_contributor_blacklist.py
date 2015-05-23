@@ -6,6 +6,15 @@ import types
 import reddit_util
 
 class SubContributorBlacklist(Filter, PostFilter, CommentFilter):
+	"""
+	Wiki configuration:
+		blacklist: array of subreddit names [required]
+		ban: true or false [optional]
+		ban_note: mod-only ban note [optional]
+		ban_message: ban message sent to user [optional]
+		ban_duration: duration of ban in days, 0 for permanent [optional]
+	"""
+	
 	filter_id = "sub-blacklist"
 	filter_name = "Subreddit Contributor Blacklist"
 	filter_descr = "Removes submissions from contributors to blacklisted subreddits"
@@ -20,6 +29,17 @@ class SubContributorBlacklist(Filter, PostFilter, CommentFilter):
 			config = configs[0]
 			if "blacklist" in config:
 				self.blacklist = config["blacklist"]
+			
+			if "ban" in config:
+				self.ban = {}
+				if "ban_note" in config:
+					self.ban["note"] = config["ban_note"]
+				if "ban_message" in config:
+					self.ban["message"] = config["ban_message"]
+				if "ban_duration" in config:
+					self.ban["duration"] = config["ban_duration"]
+			else:
+				self.ban = None
 	
 	def process_comment(self, comment):
 		author = HashableRedditor(comment.author)
@@ -37,8 +57,7 @@ class SubContributorBlacklist(Filter, PostFilter, CommentFilter):
 				return self._get_response(sub)
 		return False
 	
-	@staticmethod
-	def _get_response(bl_subreddit):
+	def _get_response(self, bl_subreddit):
 		title = "Blacklisted subreddit contributor"
 		body = "A contributor to a blacklisted subreddit was removed.\n\n" \
 			   "* Blacklisted subreddit: {bl_sub}" \
@@ -46,7 +65,7 @@ class SubContributorBlacklist(Filter, PostFilter, CommentFilter):
 			   "* Permalink: {permalink}\n"
 		body = safe_format(body, bl_sub=bl_subreddit)
 		
-		return FilterResult.REMOVE, {"log": (title, body)}
+		return FilterResult.REMOVE, {"log": (title, body), "ban": self.ban}
 	
 	# Utilities
 	

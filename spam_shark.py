@@ -99,10 +99,11 @@ class Filter(metaclass=ABCMeta):
 		pass
 
 class FilterResult(IntEnum):
-	REMOVE = 1
-	FLAIR = 2
-	MESSAGE = 2
-	LOG = 3
+	BAN = 1
+	REMOVE = 2
+	FLAIR = 3
+	MESSAGE = 3
+	LOG = 4
 
 class LinkFilter(metaclass=ABCMeta):
 	@abstractmethod
@@ -268,6 +269,8 @@ def process_message(message):
 
 def process_filter_results(results, thing):
 	if results and len(results) == 2 and results[0]:
+		if results[0] <= FilterResult.BAN:
+			_ban_author(results[1], thing)
 		if results[0] <= FilterResult.REMOVE:
 			thing.remove()
 		if results[0] <= FilterResult.MESSAGE:
@@ -278,21 +281,34 @@ def process_filter_results(results, thing):
 		return True
 	return False
 
+def _ban_author(messages, thing):
+	note = msg = None
+	dur = 0
+	if dict_exists(messages, "ban"):
+		ban_info = messages["ban"]
+		if dict_exists(ban_info, "note"):
+			note = ban_info["note"]
+		if dict_exists(ban_info, "message"):
+			msg = ban_info["message"]
+		if dict_exists(ban_info, "duration"):
+			dur = ban_info["duration"]
+	thing.subreddit.add_ban(thing.author, params={"note": note, "ban_message": msg, "duration": dur})
+
 def _send_messages(messages, thing):
 	thing_info = _get_thing_info(thing)
 	def fmt(text):
 		return safe_format(text, **thing_info)
 	
-	if "modmail" in messages:
+	if dict_exists(messages, "modmail"):
 		title = "[SpamShark] "+fmt(messages["modmail"][0])
 		body = fmt(messages["modmail"][1])
 		reddit_util.send_modmail(r, config.subreddit, title, body)
 	if not thing is None:
-		if "reply" in messages:
+		if dict_exists(messages, "reply"):
 			#TODO: test this
 			body = fmt(messages["reply"])
 			reddit_util.reply_to(thing, body)
-		if "pm" in messages:
+		if dict_exists(messages, "pm"):
 			#TODO: test this
 			author = thing.author.name
 			title = fmt(["pm"][0])
@@ -302,12 +318,12 @@ def _send_messages(messages, thing):
 
 def _flair_thing(messages, thing):
 	if not thing is None:
-		if "flair_user" in messages:
+		if dict_exists(messages, "flair_user"):
 			author = thing.author
 			flair_text = messages["flair_user"][0]
 			flair_css = messages["flair_user"][1]
 			reddit_util.set_flair(r, config.subreddit, author, flair_text, flair_css)
-		if "flair_post" in messages and reddit_util.is_post(thing):
+		if dict_exists(messages, "flair_post") and reddit_util.is_post(thing):
 			flair_text = messages["flair_post"][0]
 			flair_css = messages["flair_post"][1]
 			reddit_util.set_flair(r, config.subreddit, thing, flair_text, flair_css)
@@ -317,7 +333,7 @@ def _log_result(messages, thing):
 	def fmt(text):
 		return safe_format(text, **thing_info)
 	
-	if "log" in messages and not config.log_subreddit is None and len(config.log_subreddit) > 0:
+	if dict_exists(messages, "log") and not config.log_subreddit is None and len(config.log_subreddit) > 0:
 		title = fmt(messages["log"][0])
 		body = fmt(messages["log"][1])
 		reddit_util.submit_text_post(r, config.log_subreddit, title, body)
@@ -521,6 +537,9 @@ class _SafeDict(dict):
 
 def safe_format(text, **kwargs):
 	return text.format_map(_SafeDict(kwargs))
+
+def dict_exists(messages, name):
+	return name in messages and not messages[name] is None
 
 ###########
 # Running #
