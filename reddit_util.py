@@ -83,6 +83,9 @@ def get_all_new(subreddit, limit=200, save_last=True):
 	after = None
 	while len(posts) < limit:
 		new_posts = list(subreddit.get_new(limit=100, params={"after": after}))
+		if len(new_posts) == 0:
+			break
+		
 		posts.extend(new_posts)
 		after = "t3_"+posts[-1].id
 		after_time = posts[-1].created_utc
@@ -103,6 +106,9 @@ def get_all_comments(subreddit_or_user, limit=300, save_last=True):
 	after = None
 	while len(comments) < limit:
 		new_comments = list(subreddit_or_user.get_comments(limit=100, params={"after": after}))
+		if len(new_comments) == 0:
+			break
+		
 		comments.extend(new_comments)
 		after = "t1_"+comments[-1].id
 		after_time = comments[-1].created_utc
@@ -123,6 +129,9 @@ def get_all_submitted(user, limit=200, save_last=True):
 	after = None
 	while len(posts) < limit:
 		new_posts = list(user.get_submitted(limit=100, params={"after": after}))
+		if len(new_posts) == 0:
+			break
+		
 		posts.extend(new_posts)
 		after = "t3_"+posts[-1].id
 		after_time = posts[-1].created_utc

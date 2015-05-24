@@ -3,8 +3,7 @@ from abc import ABCMeta, abstractmethod
 from time import time
 import bz2, pickle, os, sys
 
-#sys.path.append(os.path.join(os.path.dirname(__file__), "cache"))
-#sys.path.append(os.path.dirname(__file__))
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 def load_cached_storage(cache_file, default_size=1000):
 	if cache_file is not None and os.path.exists(cache_file):

@@ -12,6 +12,9 @@ from cache import load_cached_storage
 import warnings
 warnings.simplefilter("ignore", ResourceWarning)
 
+# Ensure proper files can be access if running with cron
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 # Globals
 version = "0.4"
 r = None
@@ -138,17 +141,17 @@ post_filters = []
 comment_filters = []
 pm_filters = []
 
-def init_filters(configure=True, verbose=True):
-	if verbose: print("Loading filters...", end=" ")
+def init_filters(configure=True):
+	print("Loading filters...", end=" ")
 	
 	# Load filters if not already loaded
 	if len(all_filters) == 0:
 		new_filters = get_filters()
-		if verbose: print("using {} filters...".format(len(new_filters)), end=" ")
+		print("using {} filters...".format(len(new_filters)), end=" ")
 		
 		for nf_class in new_filters:
 			if nf_class.filter_id is None:
-				if verbose: print("\n  Error: Filter {} must specify a filter_id\n".format(nf_class.__module__+"."+nf_class.__name__))
+				print("\n  Error: Filter {} must specify a filter_id\n".format(nf_class.__module__+"."+nf_class.__name__))
 				continue
 			
 			if nf_class.filter_id in config.enabled_filters:
@@ -163,27 +166,26 @@ def init_filters(configure=True, verbose=True):
 	
 	# Initialize filters with wiki config
 	if configure:
-		if verbose: print("configuring filters...", end=" ")
+		print("configuring filters...", end=" ")
 		configs = build_remote_config()
 		for f in all_filters:
-			if verbose:
-				print("\nConfiguring {}".format(f.filter_id))
-				print("--------------------")
+			print("\nConfiguring {}".format(f.filter_id))
+			print("--------------------")
 			
 			f_configs = configs[f.filter_id] if f.filter_id in configs else []
 			try:
 				error = f.init_filter(f_configs)
-				if error and verbose:
+				if error:
 					print("\n  Error: Filter configuration failed for {} ({})\n".format(f.filter_id, error))
 			except Exception as e:
 				ex_type, ex, tb = sys.exc_info()
-				if verbose: print("Error: Filter configuration unexpectedly failed for {} ({})".format(f.filter_id, e))
+				print("Error: Filter configuration unexpectedly failed for {} ({})".format(f.filter_id, e))
 				traceback.print_tb(tb)
 				del tb
 			
-		if verbose: print("--------------------")
+		print("--------------------")
 	
-	if verbose: print("done!")
+	print("done!")
 
 def has_link_filters():
 	return len(link_filters) > 0
@@ -413,12 +415,13 @@ def process_loop():
 			for message in unread:
 				message.mark_as_read()
 				
-				if message.subject.lower() == config.subreddit and message.body == "update" \
-						and (len(config.config_whitelist) == 0 or message.author.name.lower() in config.config_whitelist):
-					print("Update message received from {}".format(message.author.name))
-					update = True
-				else:
-					new_messages.append(message)
+				if message.subject.lower() == config.subreddit:
+					if message.body == "update" \
+							and (len(config.config_whitelist) == 0 or message.author.name.lower() in config.config_whitelist):
+						print("Update message received from {}".format(message.author.name))
+						update = True
+					else:
+						new_messages.append(message)
 			
 			# Initialize filters if non-initialized or requested
 			if update:
@@ -446,6 +449,9 @@ def process_loop():
 			for comment in new_comments:
 				process_comment(comment)
 			
+			if running and waitEvent.wait(timeout=20):
+				break
+			
 		except (ModeratorRequired, ModeratorOrScopeRequired, HTTPError) as e:
 			if not isinstance(e, HTTPError) or e.response.status_code == 403:
 				print("Error: No moderator permission")
@@ -453,59 +459,60 @@ def process_loop():
 			print("Error: {}".format(e))
 			traceback.print_tb(tb)
 			del tb
+		except KeyboardInterrupt:
+			print("Stopped with keyboard interrupt")
 		except Exception as e:
 			ex_type, ex, tb = sys.exc_info()
 			print("Error: {}".format(e))
 			traceback.print_tb(tb)
 			del tb
-		
-		if running:
-			if waitEvent.wait(timeout=20):
-				break
 	
 	post_cache.save()
 	comment_cache.save()
 
-def main():
+def main(no_input=False):
 	build_local_config()
 	
 	# Start
-	processing_thread = Thread(target=process_loop, name="SpamShark-process-thread")
-	processing_thread.start()
-	
-	global running
-	while running:
-		try:
-			raw_cmd = input()
-			cmds = raw_cmd.split()
-			cmd = cmds[0]
-			
-			if cmd == "stop":
-				print("Stopping...")
-				running = False
-				waitEvent.set()
-			elif cmd == "status":
-				if running:
-					print("I'm not dead yet!")
-				else:
-					print("Well now he's dead.")
-			else:
-				print("Command \""+cmds[0]+"\" not found")
+	if no_input:
+		process_loop()
+	else:
+		processing_thread = Thread(target=process_loop, name="SpamShark-process-thread")
+		processing_thread.start()
 		
-		except KeyboardInterrupt:
-			running = False
-			waitEvent.set()
-		except Exception as e:
-			ex_type, ex, tb = sys.exc_info()
-			if ex_type == EOFError:
+		global running
+		while running:
+			try:
+				raw_cmd = input()
+				cmds = raw_cmd.split()
+				cmd = cmds[0]
+				
+				if cmd == "stop":
+					print("Stopping...")
+					running = False
+					waitEvent.set()
+				elif cmd == "status":
+					if running:
+						print("I'm not dead yet!")
+					else:
+						print("Well now he's dead.")
+				else:
+					print("Command \""+cmds[0]+"\" not found")
+			
+			except KeyboardInterrupt:
 				running = False
 				waitEvent.set()
-			else:
-				print("Error: {0}".format(e))
-				traceback.print_tb(tb)
-			del tb
-	
-	processing_thread.join()
+			except Exception as e:
+				ex_type, ex, tb = sys.exc_info()
+				if ex_type == EOFError:
+					running = False
+					waitEvent.set()
+				else:
+					print("Error: {0}".format(e))
+					traceback.print_tb(tb)
+				del tb
+		
+		processing_thread.join()
 	
 	# Clean up
 	print("Saving and cleaning up...", end=" ")
@@ -548,22 +555,24 @@ def dict_exists(messages, name):
 if __name__ == "__main__":
 	import argparse
 	parser = argparse.ArgumentParser(description="SpamShark, modular reddit moderation bot")
-	parser.add_argument("-lf", "--listfilters", action="store_true", help="list available filters")
+	parser.add_argument("--no-input", action="store_true", help="run in a single thread without stdin")
+	parser.add_argument("--list-filters", action="store_true", help="list available filters")
 	parser.add_argument("-v", "--version", action="version", version="SpamShark "+version)
 	args = parser.parse_args()
 	
-	if args.listfilters:
-		init_filters(configure=False, verbose=False)
+	if args.list_filters:
+		filters = get_filters()
 		print("Available filters:\n------------------")
-		for i, f in enumerate(all_filters):
+		for i, f in enumerate(filters):
 			print("{}. {}".format(i+1, f.filter_id), end="")
 			if hasattr(f, "filter_name"):
 				print(": {}".format(f.filter_name))
 			else:
 				print()
 			if hasattr(f, "filter_descr") and not f.filter_descr is None:
-				print("  {}".format(f.filter_descr))
+				print("   {}".format(f.filter_descr))
 			if hasattr(f, "filter_author") and not f.filter_author is None:
-				print("  Created by {}".format(f.filter_author))
+				print("   Created by {}".format(f.filter_author))
+			print()
 	else:
-		main()
+		main(no_input=args.no_input)
