@@ -60,7 +60,7 @@ class SubContributorBlacklist(Filter, PostFilter, CommentFilter):
 	def _get_response(self, bl_subreddit):
 		title = "Blacklisted subreddit contributor"
 		body = "A contributor to a blacklisted subreddit was removed.\n\n" \
-			   "* Blacklisted subreddit: {bl_sub}" \
+			   "* Blacklisted subreddit: {bl_sub}\n" \
 			   "* User: {author}\n" \
 			   "* Permalink: {permalink}\n"
 		body = safe_format(body, bl_sub=bl_subreddit)

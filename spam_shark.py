@@ -32,7 +32,7 @@ def build_local_config():
 	config.username = config.username.lower()
 
 def build_remote_config():
-	wiki_config = reddit_util.get_wiki_page(config.config_subreddit, config.config_page)
+	wiki_config = reddit_util.get_wiki_page(r, config.config_subreddit, config.config_page)
 	if not wiki_config:
 		print("Error: wiki page doesn't exist")
 		return None
@@ -116,9 +116,6 @@ class LinkFilter(metaclass=ABCMeta):
 class PostFilter(metaclass=ABCMeta):
 	@abstractmethod
 	def process_post(self, link):
-		"""
-		:return: {"modmail": (modmail_title, modmail_body]), "reply": reply_text, "log": (log_title, log_body)}
-		"""
 		return False
 
 class CommentFilter(metaclass=ABCMeta):
@@ -340,7 +337,7 @@ def _log_result(messages, thing):
 		body = fmt(messages["log"][1])
 		reddit_util.submit_text_post(r, config.log_subreddit, title, body)
 
-def _get_thing_info(thing):
+def _get_thing_info(thing, link=None):
 	if reddit_util.is_post(thing):
 		return {
 			"author": "/u/"+thing.author.name,
@@ -350,21 +347,27 @@ def _get_thing_info(thing):
 			"link": thing.url if not thing.is_self else ""
 		}
 	if reddit_util.is_comment(thing):
-		return {
+		resp = {
 			"author": "/u/"+thing.author.name,
 			"permalink": reddit_util.reduce_reddit_link(thing.permalink),
 			"body": thing.body,
 		}
+		if link:
+			resp["link"] = link
+		return resp
 	if reddit_util.is_message(thing):
 		print("IT'S A MESSAGE!")
 		from pprint import pprint
 		pprint(vars(thing))
-		return {
+		resp = {
 			"author": "/u/"+thing.author.name,
 			"permalink": reddit_util.reduce_reddit_link(thing.permalink),
 			"title": thing.title,
 			"body": thing.body,
 		}
+		if link:
+			resp["link"] = link
+		return resp
 	return {}
 
 # Actual main

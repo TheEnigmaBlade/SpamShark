@@ -114,3 +114,4 @@ venv
 data
 config-mine.py
 *~
+filters/*_private.py

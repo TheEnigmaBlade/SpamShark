@@ -88,7 +88,10 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 	filter_author = "Enigma"
 	
 	def init_filter(self, configs):
-		self.post_cache = TimedObjCache(expiration=300)
+		ex = 300
+		if len(configs) > 0 and "check_after" in configs:
+			ex = configs["check_after"]
+		self.post_cache = TimedObjCache(expiration=ex)
 	
 	def update(self):
 		to_check = self.post_cache._prune()
@@ -116,7 +119,8 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 	
 	@staticmethod
 	def _wow_such_vote_solicitation(text):
-		return "reddit.com/r/"+config.subreddit in text or "redd.it" in text
+		text = text.lower()
+		return "reddit.com/r/"+config.subreddit in text or "redd.it" in text or ("upvote" in text and "reddit" in text)
 	
 	@staticmethod
 	def _get_response(video_url, post):

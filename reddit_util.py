@@ -46,23 +46,6 @@ def init_reddit_session():
 		print("failed! Couldn't connect: {}".format(e))
 		raise e
 
-def init_reddit_session_old():
-	try:
-		import config
-		
-		#print("Connecting to reddit...", end=" ")
-		r = praw.Reddit(user_agent=config.useragent)
-		#print("logging in...", end=" ")
-		if config.username is None or config.password is None:
-			return None
-		r.login(config.username, config.password)
-		#print("done!")
-		return r
-	
-	except Exception as e:
-		#print("failed!\tError: couldn't connect to reddit, {0}".format(e))
-		return None
-
 def destroy_reddit_session(r):
 	r.clear_authentication()
 
@@ -143,14 +126,8 @@ def get_all_submitted(user, limit=200, save_last=True):
 		_last_submitted_time = posts[0].created_utc
 	return posts
 
-def get_wiki_page(subreddit, page):
-	# Workaround because the current version of PRAW can't access restricted wiki pages through oauth
-	r2 = init_reddit_session_old()
-	if r2 is None:
-		return None
-	result = r2.get_wiki_page(subreddit, page)
-	destroy_reddit_session(r2)
-	return result
+def get_wiki_page(r, subreddit_name, page_name):
+	return r.get_wiki_page(subreddit_name, page_name)
 
 # Thing doing
 
