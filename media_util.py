@@ -1,3 +1,4 @@
+from functools import lru_cache
 import requests, re
 from cache import TimedObjCache
 import config
@@ -7,11 +8,12 @@ import config
 _yt_sigs = ["youtube.com", "youtu.be"]
 _yt_headers = {"User-Agent": config.useragent}
 _yt_video_url = "https://www.googleapis.com/youtube/v3/videos?part={type}&id={id}"
+_yt_playlist_url = "https://www.googleapis.com/youtube/v3/playlists?part={type}&id={id}"
 _yt_comments_url = "https://www.googleapis.com/youtube/v3/commentThreads?part={type}&textFormat=plainText&videoId={id}"
 _yt_last_time = 0
 _yt_cache = TimedObjCache(expiration=1800)	# 30 min
 
-_yt_video_pattern = re.compile("(?:youtube\.com/(?:(?:watch|attribution_link)\?(?:.*(?:&|%3F|&amp;))?v(?:=|%3D)|embed/)|youtu\.be/)([a-zA-Z0-9-_]{11})")
+_yt_video_pattern = re.compile("(?:youtube\.com/(?:(?:watch|attribution_link)\?(?:.*(?:&|%3F|&amp;))?v(?:=|%3D)|embed/|v/)|youtu\.be/)([a-zA-Z0-9-_]{11})")
 _yt_playlist_pattern = re.compile("youtube\.com/playlist\?list=([a-zA-Z0-9-_]+)")
 _yt_channel_pattern = re.compile("youtube\.com/(?:#/)?(?:channel|user)/([a-zA-Z0-9-_]+)")
 
@@ -46,6 +48,8 @@ def _get_youtube_playlist_id(url):
 		return match[0]
 	return None
 
+## Getting channel information
+
 def get_youtube_channel(url):
 	match = _yt_channel_pattern.findall(url)
 	if len(match) > 0:
@@ -59,6 +63,7 @@ def get_youtube_channel(url):
 	if not ytid is None:
 		return _get_channel_from_playlist(ytid)
 
+@lru_cache()
 def _get_channel_from_video(video_id):
 	url = _yt_video_url.format(type="snippet", id=video_id)
 	response = _youtube_request(url)
@@ -74,23 +79,23 @@ def _get_channel_from_video(video_id):
 	
 	return None
 
+@lru_cache()
 def _get_channel_from_playlist(playlist_id):
-	# TODO: fix
-	return None
-	
-	chan_info = _yt_channel_cache.get(playlist_id)
-	if chan_info is not None:
-		return chan_info
-	
-	playlist_info = _youtube_request("playlists", playlist_id)
-	if playlist_info is None:
+	url = _yt_playlist_url.format(type="snippet", id=playlist_id)
+	response = _youtube_request(url)
+	if response is None or len(response["items"]) == 0:
 		return None
 	
-	author = playlist_info["feed"]["author"][0]
-	author_info = ("UC"+author["yt$userId"]["$t"], author["name"]["$t"])
-	#print("ID={}, name={}".format(*author_info))
-	_yt_channel_cache.store(playlist_id, author_info)
-	return author_info
+	video_info = response["items"][0]
+	if video_info["kind"] == "youtube#playlist" and "snippet" in video_info:	# Sanity check
+		snippet = video_info["snippet"]
+		channelId = snippet["channelId"]
+		channelName = snippet["channelTitle"]
+		return channelId, channelName
+	
+	return None
+
+## Getting video information
 
 def get_youtube_video_description(url):
 	video_id = _get_youtube_video_id(url)
