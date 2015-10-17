@@ -77,7 +77,11 @@ Defined in enum `spam_shark.FilterResult`
 
 * `LOG`: Logs the action
 
-  Requires ```"log": (log_title, log_body)``` defined in message actions
+  Requires `"log": (log_title, log_body)` defined in message actions
+
+* `REPORT`: Reports the submission and does nothing else
+
+  Requires `"reason": reason_msg` defined in message actions
 
 All message texts (title and body) are auto-formatted with basic post information using Python format syntax. The available values are:
 
@@ -86,6 +90,7 @@ All message texts (title and body) are auto-formatted with basic post informatio
 * `title`: Not available for comment actions.
 * `body`
 * `link`: Only available on posts (empty if self post).
+* `subreddit`
 
 #### Filter configuration
 
