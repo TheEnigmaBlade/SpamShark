@@ -92,7 +92,7 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 		if len(configs) > 0 and "check_after" in configs:
 			ex = configs["check_after"]
 		self.post_cache = TimedObjCache(expiration=ex)
-	
+		
 	def update(self):
 		to_check = self.post_cache._prune()
 		
@@ -100,7 +100,7 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 			# Video description
 			desc = media_util.get_youtube_video_description(url)
 			if not desc is None and self._wow_such_vote_solicitation(desc):
-				return self._get_response(url, post)
+				yield self._get_response(url, post)
 			
 			# Video comments
 			# Might be better to only check uploader comments
@@ -108,9 +108,7 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 			if not comments is None:
 				for comment in comments:
 					if self._wow_such_vote_solicitation(comment):
-						return self._get_response(url, post)
-		
-		return False
+						yield self._get_response(url, post)
 	
 	def process_post(self, post):
 		if not post.is_self and media_util.is_youtube_video(post.url):
@@ -131,4 +129,95 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 			   "* Permalink: {permalink}\n"
 		body = safe_format(body, video_url=video_url)
 		
-		return FilterResult.MESSAGE, {"log": (title, body), "modmail": (title, body)}, post
+		return FilterResult.MESSAGE, {"log": (title, body), "modmail": (title, body)}
+
+class YouTubeDurationFilter(Filter, PostFilter):
+	"""
+	Wiki configuration:
+		min_duration: length in seconds [optional]
+		max_duration: length in seconds [optional]
+		reply: comment to leave on removed posts [optional]
+	"""
+	filter_id = "youtube-duration"
+	filter_name = "YouTube Video Duration Filter"
+	filter_descr = None
+	filter_author = "Enigma"
+	
+	min_dur = -1
+	max_dur = -1
+	enabled = False
+	reply = None
+	
+	failed_posts = []
+	
+	def init_filter(self, configs):
+		if len(configs) == 1:
+			c = configs[0]
+			if "min_duration" in c:
+				self.min_dur = c["min_duration"]
+				print("Min duration: {}".format(self.min_dur))
+			if "max_duration" in c:
+				self.max_dur = c["max_duration"]
+				print("Max duration: {}".format(self.max_dur))
+			enabled = self.min_dur > -1 or self.max_dur > -1
+			if not enabled:
+				print("Not enabled because there are no settings!")
+			
+			if "reply" in c:
+				self.reply = c["reply"]
+				print("Reply:")
+				print(self.reply)
+			else:
+				print("Removing silently")
+			
+			return False
+		else:
+			return "Too many configs"
+	
+	def update(self):
+		failed = self.failed_posts[:]
+		for post in failed:
+			yield self.process_post(post)
+	
+	def process_post(self, post):
+		if self.enabled and not post.is_self:
+			if media_util.is_youtube_video(post.url):
+				print("Checking video: {}".format(post.permalink))
+				length = media_util.get_youtube_video_duration(post.url)
+				print("  duration = {}".format(length))
+				if length is not None:
+					if self.min_dur > -1 and length < self.min_dur:
+						return self._get_response_min(post.url, post)
+					if self.max_dur > -1 and length > self.max_dur:
+						return self._get_response_max(post.url, post)
+				else:
+					self.failed_posts.append(post)
+		return False
+	
+	def _get_response_min(self, video_url, post):
+		title = "YouTube video duration too short"
+		body = "This video should have been in a self post.\n\n" \
+			   "* Video: {video_url}\n" \
+			   "* User: {author}\n" \
+			   "* Permalink: {permalink}\n"
+		body = safe_format(body, video_url=video_url)
+		
+		reply = self.reply + "\n\n---\n\n" \
+				"*This action was performed by a bot. If you believe it is a mistake, please [message the mods](https://reddit.com/message/compose?to=%2Fr%2F{subreddit}).*"
+		
+		print("Video too short!")
+		return FilterResult.REMOVE, {"log": (title, body), "reply": reply}
+	
+	def _get_response_max(self, video_url, post):
+		title = "YouTube video duration too long"
+		body = "This video should have been in a self post.\n\n" \
+			   "* Video: {video_url}\n" \
+			   "* User: {author}\n" \
+			   "* Permalink: {permalink}\n"
+		body = safe_format(body, video_url=video_url)
+		
+		reply = self.reply + "\n\n---\n\n" \
+				"*This action was performed by a bot. If you believe it is a mistake, please [message the mods](https://reddit.com/message/compose?to=%2Fr%2F{subreddit}).*"
+		
+		print("Video too long!")
+		return FilterResult.REMOVE, {"log": (title, body), "reply": reply}

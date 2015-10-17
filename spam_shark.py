@@ -93,6 +93,7 @@ def get_filters():
 
 class Filter(metaclass=ABCMeta):
 	filter_id = None
+	enabled = True
 	
 	@abstractmethod
 	def init_filter(self, configs):
@@ -107,6 +108,7 @@ class FilterResult(IntEnum):
 	FLAIR = 3
 	MESSAGE = 3
 	LOG = 4
+	REPORT = 5
 
 class LinkFilter(metaclass=ABCMeta):
 	@abstractmethod
@@ -171,9 +173,11 @@ def init_filters(configure=True):
 			
 			f_configs = configs[f.filter_id] if f.filter_id in configs else []
 			try:
+				f.enabled = True
 				error = f.init_filter(f_configs)
 				if error:
 					print("\n  Error: Filter configuration failed for {} ({})\n".format(f.filter_id, error))
+					f.enabled = False
 			except Exception as e:
 				ex_type, ex, tb = sys.exc_info()
 				print("Error: Filter configuration unexpectedly failed for {} ({})".format(f.filter_id, e))
@@ -277,6 +281,8 @@ def process_filter_results(results, thing):
 			_flair_thing(results[1], thing)
 		if results[0] <= FilterResult.LOG:
 			_log_result(results[1], thing)
+		if results[0] == FilterResult.REPORT:
+			thing.report(reason=results[1])
 		return True
 	return False
 
@@ -304,9 +310,8 @@ def _send_messages(messages, thing):
 		reddit_util.send_modmail(r, config.subreddit, title, body)
 	if not thing is None:
 		if dict_exists(messages, "reply"):
-			#TODO: test this
 			body = fmt(messages["reply"])
-			reddit_util.reply_to(thing, body)
+			reddit_util.reply_to(thing, body, distinguish=True)
 		if dict_exists(messages, "pm"):
 			#TODO: test this
 			author = thing.author.name
@@ -344,13 +349,15 @@ def _get_thing_info(thing, link=None):
 			"permalink": reddit_util.reduce_reddit_link(thing.permalink),
 			"title": thing.title,
 			"body": thing.selftext if thing.is_self else "",
-			"link": thing.url if not thing.is_self else ""
+			"link": thing.url if not thing.is_self else "",
+			"subreddit": config.subreddit
 		}
 	if reddit_util.is_comment(thing):
 		resp = {
 			"author": "/u/"+thing.author.name,
 			"permalink": reddit_util.reduce_reddit_link(thing.permalink),
 			"body": thing.body,
+			"subreddit": config.subreddit
 		}
 		if link:
 			resp["link"] = link
@@ -372,27 +379,23 @@ def _get_thing_info(thing, link=None):
 
 # Actual main
 
+args = None
 running = True
 waitEvent = Event()
 
 def update_filters():
 	def do_result(result_tuple):
-		if len(result_tuple) == 3:
+		if result_tuple and len(result_tuple) == 3:
 			process_filter_results((result_tuple[0], result_tuple[1]), result_tuple[2])
 	
-	for f in all_filters:
+	for ff in all_filters:
 		try:
-			results = f.update()
-			if results:
-				if isinstance(results, list):
-					for result in results:
-						do_result(result)
-				else:
-					do_result(results)
+			for result in ff.update():
+				do_result(result)
 			
 		except Exception as e:
 			ex_type, ex, tb = sys.exc_info()
-			print("Error: Filter update unexpectedly failed for {} ({})".format(f.filter_id, e))
+			print("Error: Filter update unexpectedly failed for {} ({})".format(ff.filter_id, e))
 			traceback.print_tb(tb)
 			del tb
 
@@ -473,11 +476,11 @@ def process_loop():
 	post_cache.save()
 	comment_cache.save()
 
-def main(no_input=False):
+def main():
 	build_local_config()
 	
 	# Start
-	if no_input:
+	if args.no_input:
 		process_loop()
 	else:
 		processing_thread = Thread(target=process_loop, name="SpamShark-process-thread")
@@ -559,6 +562,7 @@ if __name__ == "__main__":
 	import argparse
 	parser = argparse.ArgumentParser(description="SpamShark, modular reddit moderation bot")
 	parser.add_argument("--no-input", action="store_true", help="run in a single thread without stdin")
+	parser.add_argument("--no-update", action="store_true", help="run without checking for config update messages")
 	parser.add_argument("--list-filters", action="store_true", help="list available filters")
 	parser.add_argument("-v", "--version", action="version", version="SpamShark "+version)
 	args = parser.parse_args()
@@ -578,4 +582,4 @@ if __name__ == "__main__":
 				print("   Created by {}".format(f.filter_author))
 			print()
 	else:
-		main(no_input=args.no_input)
+		main(args)

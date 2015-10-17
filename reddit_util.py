@@ -131,7 +131,11 @@ def get_wiki_page(r, subreddit_name, page_name):
 
 # Thing doing
 
+#TODO: remove
 def comment_on(comment_text, post=None, comment=None, distinguish=False):
+	"""
+	Note: deprecated
+	"""
 	reply = None
 	if post is not None:
 		reply = post.add_comment(comment_text)
@@ -157,11 +161,17 @@ def send_modmail(r, subreddit, title, body):
 def send_pm(r, user, title, body, from_sr=None):
 	r.send_message(user, title, body, from_sr=from_sr)
 
-def reply_to(thing, body):
-	if isinstance(thing, praw.objects.Inboxable):
-		thing.reply(body)
-	elif isinstance(thing, praw.objects.Submission):
-		thing.add_comment(body)
+def reply_to(thing, body, distinguish=False):
+	reply = None
+	if isinstance(thing, praw.objects.Submission):
+		reply = thing.add_comment(body)
+	elif isinstance(thing, praw.objects.Inboxable):
+		reply = thing.reply(body)
+	
+	if distinguish and reply is not None:
+		response = reply.distinguish()
+		if len(response) > 0 and len(response["errors"]) > 0:
+			print("Error when distinguishing: {0}".format(response["errors"]))
 
 def set_flair(r, subreddit, thing, flair_text, flair_css):
 	r.set_flair()

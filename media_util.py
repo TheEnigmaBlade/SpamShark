@@ -1,5 +1,5 @@
 from functools import lru_cache
-import requests, re
+import requests, re, isodate
 from cache import TimedObjCache
 import config
 
@@ -7,9 +7,10 @@ import config
 
 _yt_sigs = ["youtube.com", "youtu.be"]
 _yt_headers = {"User-Agent": config.useragent}
-_yt_video_url = "https://www.googleapis.com/youtube/v3/videos?part={type}&id={id}"
-_yt_playlist_url = "https://www.googleapis.com/youtube/v3/playlists?part={type}&id={id}"
-_yt_comments_url = "https://www.googleapis.com/youtube/v3/commentThreads?part={type}&textFormat=plainText&videoId={id}"
+_yt_api_base = "https://www.googleapis.com/youtube/v3/"
+_yt_video_url = _yt_api_base+"videos?part={type}&id={id}"
+_yt_playlist_url = _yt_api_base+"playlists?part={type}&id={id}"
+_yt_comments_url = _yt_api_base+"commentThreads?part={type}&textFormat=plainText&videoId={id}"
 _yt_last_time = 0
 _yt_cache = TimedObjCache(expiration=1800)	# 30 min
 
@@ -109,6 +110,22 @@ def get_youtube_video_description(url):
 		if video_info["kind"] == "youtube#video" and "snippet" in video_info:	# Sanity check
 			description = video_info["snippet"]["description"]
 			return description
+	
+	return None
+
+def get_youtube_video_duration(url):
+	video_id = _get_youtube_video_id(url)
+	if not video_id is None:
+		url = _yt_video_url.format(type="contentDetails", id=video_id)
+		response = _youtube_request(url)
+		if response is None or len(response["items"]) == 0:
+			return None
+		
+		video_info = response["items"][0]
+		if video_info["kind"] == "youtube#video" and "contentDetails" in video_info:	# Sanity check
+			duration = video_info["contentDetails"]["duration"]
+			duration = isodate.parse_duration(duration).total_seconds()
+			return duration
 	
 	return None
 
