@@ -416,18 +416,19 @@ def process_loop():
 			
 			# Check for update messages
 			update = len(all_filters) == 0			# Guarantee update if on first iteration (assuming filters exist)
-			unread = r.get_unread(limit=None)
 			new_messages = list()
-			for message in unread:
-				message.mark_as_read()
-				
-				if message.subject.lower() == config.subreddit:
-					if message.body == "update" \
-							and (len(config.config_whitelist) == 0 or message.author.name.lower() in config.config_whitelist):
-						print("Update message received from {}".format(message.author.name))
-						update = True
-					else:
-						new_messages.append(message)
+			if not args.no_update:
+				unread = r.get_unread(limit=None)
+				for message in unread:
+					message.mark_as_read()
+					
+					if message.subject.lower() == config.subreddit:
+						if message.body == "update" \
+								and (len(config.config_whitelist) == 0 or message.author.name.lower() in config.config_whitelist):
+							print("Update message received from {}".format(message.author.name))
+							update = True
+						else:
+							new_messages.append(message)
 			
 			# Initialize filters if non-initialized or requested
 			if update:
@@ -442,6 +443,7 @@ def process_loop():
 			## Messages
 			for message in new_messages:
 				process_message(message)
+			new_messages.clear()
 			
 			## Posts
 			new_posts = reddit_util.get_all_new(subreddit)
@@ -461,17 +463,18 @@ def process_loop():
 		except (ModeratorRequired, ModeratorOrScopeRequired, HTTPError) as e:
 			if not isinstance(e, HTTPError) or e.response.status_code == 403:
 				print("Error: No moderator permission")
-			ex_type, ex, tb = sys.exc_info()
-			print("Error: {}".format(e))
-			traceback.print_tb(tb)
-			del tb
+			elif e.response.status_code == 503:
+				print("Error: Reddit is 503ing")
+			else:
+				ex_type, ex, tb = sys.exc_info()
+				print("Error: Unhandled HTTP error ({})".format(e.response.status_code))
+				traceback.print_tb(tb, limit=1)
 		except KeyboardInterrupt:
 			print("Stopped with keyboard interrupt")
 		except Exception as e:
 			ex_type, ex, tb = sys.exc_info()
 			print("Error: {}".format(e))
 			traceback.print_tb(tb)
-			del tb
 	
 	post_cache.save()
 	comment_cache.save()
@@ -582,4 +585,4 @@ if __name__ == "__main__":
 				print("   Created by {}".format(f.filter_author))
 			print()
 	else:
-		main(args)
+		main()
