@@ -158,7 +158,7 @@ def _youtube_request(request_url):
 	
 	url = request_url+"&key="+config.youtube_api_key
 	
-	_yt_last_time = _requst_wait(_yt_last_time, 0)
+	_yt_last_time = _requst_wait(_yt_last_time, 0.25)
 	response = requests.get(url, headers=_yt_headers)
 	
 	if response.status_code == 200:

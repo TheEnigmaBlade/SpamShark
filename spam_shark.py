@@ -12,6 +12,9 @@ from cache import load_cached_storage
 import warnings
 warnings.simplefilter("ignore", ResourceWarning)
 
+import logging
+from logging import debug, info, warning, error, exception
+
 # Ensure proper files can be access if running with cron
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -100,7 +103,7 @@ class Filter(metaclass=ABCMeta):
 		pass
 	
 	def update(self):
-		pass
+		yield False
 
 class FilterResult(IntEnum):
 	BAN = 1
@@ -141,18 +144,17 @@ comment_filters = []
 pm_filters = []
 
 def init_filters(configure=True):
-	print("Loading filters...", end=" ")
+	info("Loading filters...")
 	
 	# Load filters if not already loaded
 	if len(all_filters) == 0:
 		new_filters = get_filters()
-		print("using {} filters...".format(len(new_filters)), end=" ")
+		info("using {} filters...".format(len(new_filters)))
 		
 		for nf_class in new_filters:
 			if nf_class.filter_id is None:
-				print("\n  Error: Filter {} must specify a filter_id\n".format(nf_class.__module__+"."+nf_class.__name__))
+				error("\nFilter %s must specify a filter_id", nf_class.__module__+"."+nf_class.__name__)
 				continue
-			
 			if nf_class.filter_id in config.enabled_filters:
 				nf = nf_class()
 				all_filters.append(nf)
@@ -165,28 +167,28 @@ def init_filters(configure=True):
 	
 	# Initialize filters with wiki config
 	if configure:
-		print("configuring filters...", end=" ")
+		info("configuring filters...")
 		configs = build_remote_config()
 		for f in all_filters:
-			print("\nConfiguring {}".format(f.filter_id))
-			print("--------------------")
+			debug("Configuring {}".format(f.filter_id))
+			debug("--------------------")
 			
 			f_configs = configs[f.filter_id] if f.filter_id in configs else []
 			try:
 				f.enabled = True
-				error = f.init_filter(f_configs)
-				if error:
-					print("\n  Error: Filter configuration failed for {} ({})\n".format(f.filter_id, error))
+				filter_error = f.init_filter(f_configs)
+				if filter_error:
+					error("Filter configuration failed for {} ({})\n".format(f.filter_id, filter_error))
 					f.enabled = False
 			except Exception as e:
 				ex_type, ex, tb = sys.exc_info()
-				print("Error: Filter configuration unexpectedly failed for {} ({})".format(f.filter_id, e))
+				error("Filter configuration unexpectedly failed for {} ({})".format(f.filter_id, e))
 				traceback.print_tb(tb)
 				del tb
 			
-		print("--------------------")
+		debug("--------------------")
 	
-	print("done!")
+	info("done!")
 
 def has_link_filters():
 	return len(link_filters) > 0
@@ -425,7 +427,7 @@ def process_loop():
 					if message.subject.lower() == config.subreddit:
 						if message.body == "update" \
 								and (len(config.config_whitelist) == 0 or message.author.name.lower() in config.config_whitelist):
-							print("Update message received from {}".format(message.author.name))
+							info("Update message received from {}".format(message.author.name))
 							update = True
 						else:
 							new_messages.append(message)
@@ -446,35 +448,40 @@ def process_loop():
 			new_messages.clear()
 			
 			## Posts
+			debug("Processing posts")
 			new_posts = reddit_util.get_all_new(subreddit)
 			new_posts = post_cache.get_diff(new_posts)
 			for post in new_posts:
 				process_post(post)
+			debug("Done processing posts")
 			
 			## Comments
+			debug("Processing comments")
 			new_comments = reddit_util.get_all_comments(subreddit)
 			new_comments = comment_cache.get_diff(new_comments)
 			for comment in new_comments:
 				process_comment(comment)
+			debug("Done processing comments")
 			
 			if running and waitEvent.wait(timeout=20):
 				break
 			
 		except (ModeratorRequired, ModeratorOrScopeRequired, HTTPError) as e:
 			if not isinstance(e, HTTPError) or e.response.status_code == 403:
-				print("Error: No moderator permission")
+				error("No moderator permission")
 			elif e.response.status_code == 503:
-				print("Error: Reddit is 503ing")
+				warning("Reddit is 503ing")
 			else:
-				ex_type, ex, tb = sys.exc_info()
-				print("Error: Unhandled HTTP error ({})".format(e.response.status_code))
-				traceback.print_tb(tb, limit=1)
+				#ex_type, ex, tb = sys.exc_info()
+				warning("Error: Unhandled HTTP error ({})".format(e.response.status_code))
+				exception(e)
 		except KeyboardInterrupt:
-			print("Stopped with keyboard interrupt")
+			info("Stopped with keyboard interrupt")
 		except Exception as e:
-			ex_type, ex, tb = sys.exc_info()
-			print("Error: {}".format(e))
-			traceback.print_tb(tb)
+			#ex_type, ex, tb = sys.exc_info()
+			error("Error: {}".format(e))
+			#traceback.print_tb(tb)
+			exception(e)
 	
 	post_cache.save()
 	comment_cache.save()
@@ -519,15 +526,14 @@ def main():
 				else:
 					print("Error: {0}".format(e))
 					traceback.print_tb(tb)
-				del tb
 		
 		processing_thread.join()
 	
 	# Clean up
-	print("Saving and cleaning up...", end=" ")
+	info("Saving and cleaning up...", end=" ")
 	reddit_util.destroy_reddit_session(r)
 	
-	print("done!")
+	info("done!")
 
 #############
 # Utilities #
@@ -569,6 +575,17 @@ if __name__ == "__main__":
 	parser.add_argument("--list-filters", action="store_true", help="list available filters")
 	parser.add_argument("-v", "--version", action="version", version="SpamShark "+version)
 	args = parser.parse_args()
+	
+	if args.no_input:
+		from datetime import datetime
+		log_file = datetime.now().strftime("%Y-%m-%dT%H:%M:%S") + ".log"
+		logging.basicConfig(
+			format="%(asctime)s | %(levelname)s | %(message)s",
+			datefmt="%Y-%m-%d %H:%M:%S",
+			level=logging.INFO, filename=log_file)
+	else:
+		logging.basicConfig(format="%(levelname)s | %(message)s", level=logging.INFO)
+	logging.getLogger("requests").setLevel(logging.WARNING)
 	
 	if args.list_filters:
 		filters = get_filters()

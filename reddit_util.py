@@ -38,6 +38,7 @@ def init_reddit_session():
 		_oauth_length = response_content["expires_in"] - 300
 		r.set_oauth_app_info(config.oauth_id, config.oauth_secret, "http://example.com/unused/redirect/uri")
 		r.set_access_credentials(_oauth_scopes, access_token=token)
+		r.config.api_request_delay = 1
 		
 		print("done!")
 		return r

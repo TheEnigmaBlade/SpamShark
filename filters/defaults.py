@@ -4,6 +4,7 @@ from spam_shark import Filter, FilterResult, LinkFilter, PostFilter, safe_format
 import media_util
 from cache import TimedObjCache
 import config
+from logging import info, warning
 
 class YouTubeChannelFilter(Filter, LinkFilter):
 	"""
@@ -33,8 +34,8 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 			if action == "watch":
 				self.watch_list.extend(ids)
 		
-		print("Bans: {}".format(self.ban_list))
-		print("Watches: {}".format(self.watch_list))
+		info("Bans: {}".format(self.ban_list))
+		info("Watches: {}".format(self.watch_list))
 		
 		return False
 	
@@ -42,7 +43,7 @@ class YouTubeChannelFilter(Filter, LinkFilter):
 		if media_util.is_youtube_link(link):
 			channel_info = media_util.get_youtube_channel(link)
 			if channel_info is None:
-				print("Warning: failed to get channel info for \"{}\"".format(link))
+				warning("Failed to get channel info for \"{}\"".format(link))
 			else:
 				# Check channel ID and name
 				if channel_info[0] in self.ban_list or channel_info[1] in self.ban_list:
@@ -91,6 +92,7 @@ class YouTubeVoteManipFilter(Filter, PostFilter):
 		ex = 300
 		if len(configs) > 0 and "check_after" in configs:
 			ex = configs["check_after"]
+		info("Check after: {}".format(ex))
 		self.post_cache = TimedObjCache(expiration=ex)
 		
 	def update(self):
@@ -149,49 +151,62 @@ class YouTubeDurationFilter(Filter, PostFilter):
 	reply = None
 	
 	failed_posts = []
+	num_retries = 20
 	
 	def init_filter(self, configs):
-		if len(configs) == 1:
+		if len(configs) > 1:
+			warning("Too many configs!")
+		
+		if len(configs) >= 1:
 			c = configs[0]
 			if "min_duration" in c:
 				self.min_dur = c["min_duration"]
-				print("Min duration: {}".format(self.min_dur))
+				info("Min duration: {}".format(self.min_dur))
 			if "max_duration" in c:
 				self.max_dur = c["max_duration"]
-				print("Max duration: {}".format(self.max_dur))
+				info("Max duration: {}".format(self.max_dur))
 			enabled = self.min_dur > -1 or self.max_dur > -1
 			if not enabled:
-				print("Not enabled because there are no settings!")
+				info("Not enabled because there are no settings!")
 			
 			if "reply" in c:
 				self.reply = c["reply"]
-				print("Reply:")
-				print(self.reply)
+				info("Reply:")
+				info(self.reply)
 			else:
-				print("Removing silently")
+				info("Removing silently")
 			
-			return False
-		else:
-			return "Too many configs"
+		return False
 	
 	def update(self):
 		failed = self.failed_posts[:]
-		for post in failed:
-			yield self.process_post(post)
+		self.failed_posts.clear()
+		
+		for post_tuple in failed:
+			post, retries = post_tuple
+			result = self.process_post(post)
+			if result > 0:
+				yield result
+			elif retries < self.num_retries:
+				self.failed_posts.append((post, retries+1))
+		
+		yield False
 	
-	def process_post(self, post):
+	def process_post(self, post, add_fail=True):
 		if self.enabled and not post.is_self:
 			if media_util.is_youtube_video(post.url):
 				print("Checking video: {}".format(post.permalink))
 				length = media_util.get_youtube_video_duration(post.url)
 				print("  duration = {}".format(length))
 				if length is not None:
-					if self.min_dur > -1 and length < self.min_dur:
-						return self._get_response_min(post.url, post)
-					if self.max_dur > -1 and length > self.max_dur:
-						return self._get_response_max(post.url, post)
-				else:
-					self.failed_posts.append(post)
+					if length > 0:
+						if self.min_dur > -1 and length < self.min_dur:
+							return self._get_response_min(post.url, post)
+						if self.max_dur > -1 and length > self.max_dur:
+							return self._get_response_max(post.url, post)
+					elif add_fail:
+						print("  Is none!")
+						self.failed_posts.append((post, 0))
 		return False
 	
 	def _get_response_min(self, video_url, post):
